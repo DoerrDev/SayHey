@@ -41,8 +41,6 @@ class AppSettings:
     silence_throttle_enabled: bool = True
     silence_throttle_seconds: float = 3.0
     usage_tracking_enabled: bool = False
-    auto_switch_default_mic: bool = True
-    auto_switch_mic_keyword: str = "CABLE Output"
 
 
 class SettingsStore:

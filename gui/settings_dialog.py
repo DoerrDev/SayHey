@@ -202,21 +202,6 @@ class SettingsDialog(QDialog):
         self._silence_throttle_seconds.setToolTip("连续静音超过该时长后暂停推流，默认 3 秒")
         form.addRow("静音判定时长", self._silence_throttle_seconds)
 
-        form.addRow(_section_title("默认麦克风切换"))
-
-        self._auto_switch_mic = QCheckBox("启动时自动把系统默认麦克风切到 CABLE")
-        self._auto_switch_mic.setToolTip(
-            "软件启动时把 Windows 系统默认录音设备切换到名称包含下方关键词的设备，\n"
-            "软件关闭时自动恢复原设备。崩溃后下次启动会自动恢复。\n"
-            "若找不到匹配设备则跳过。"
-        )
-        form.addRow("", self._auto_switch_mic)
-
-        self._auto_switch_mic_keyword = QLineEdit()
-        self._auto_switch_mic_keyword.setPlaceholderText("CABLE Output")
-        self._auto_switch_mic_keyword.setToolTip("设备名包含此关键词即匹配，大小写不敏感")
-        form.addRow("匹配关键词", self._auto_switch_mic_keyword)
-
         return w
 
     def _build_overlay_tab(self) -> QWidget:
@@ -366,8 +351,6 @@ class SettingsDialog(QDialog):
         self._silence_throttle.setChecked(s.silence_throttle_enabled)
         self._silence_throttle_seconds.setValue(s.silence_throttle_seconds)
         self._usage_tracking.setChecked(s.usage_tracking_enabled)
-        self._auto_switch_mic.setChecked(s.auto_switch_default_mic)
-        self._auto_switch_mic_keyword.setText(s.auto_switch_mic_keyword)
 
     def _collect(self) -> AppSettings:
         s = self._store.get()
@@ -394,8 +377,6 @@ class SettingsDialog(QDialog):
             silence_throttle_enabled=self._silence_throttle.isChecked(),
             silence_throttle_seconds=self._silence_throttle_seconds.value(),
             usage_tracking_enabled=self._usage_tracking.isChecked(),
-            auto_switch_default_mic=self._auto_switch_mic.isChecked(),
-            auto_switch_mic_keyword=self._auto_switch_mic_keyword.text().strip() or s.auto_switch_mic_keyword,
         )
 
     @Slot()
