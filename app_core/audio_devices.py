@@ -87,7 +87,7 @@ class DeviceResolver:
         if keyword:
             matches = [device for device in candidates if keyword in device.name.lower()]
             if matches:
-                return self._prefer_hostapi(matches)
+                return self._prefer_hostapi(matches, direction)
 
         if direction == "input":
             default_index = sd.default.device[0]
@@ -100,8 +100,13 @@ class DeviceResolver:
 
         raise RuntimeError(f"No matching {direction} device found.")
 
-    def _prefer_hostapi(self, devices: list[AudioDevice]) -> AudioDevice:
-        for hostapi in ("MME", "Windows DirectSound", "Windows WASAPI"):
+    def _prefer_hostapi(self, devices: list[AudioDevice], direction: str = "input") -> AudioDevice:
+        order = (
+            ("Windows WASAPI", "Windows DirectSound", "MME")
+            if direction == "output"
+            else ("MME", "Windows DirectSound", "Windows WASAPI")
+        )
+        for hostapi in order:
             for device in devices:
                 if device.hostapi == hostapi:
                     return device
@@ -118,7 +123,10 @@ class DeviceResolver:
         if preferred not in same_device:
             same_device.append(preferred)
 
-        hostapi_order = {"MME": 0, "Windows DirectSound": 1, "Windows WASAPI": 2}
+        if direction == "output":
+            hostapi_order = {"Windows WASAPI": 0, "Windows DirectSound": 1, "MME": 2}
+        else:
+            hostapi_order = {"MME": 0, "Windows DirectSound": 1, "Windows WASAPI": 2}
         return sorted(
             same_device,
             key=lambda device: (
@@ -148,4 +156,4 @@ class DeviceResolver:
                     break
         if not matches:
             raise RuntimeError(f"Required {direction} device not found: {name}")
-        return self._prefer_hostapi(matches)
+        return self._prefer_hostapi(matches, direction)

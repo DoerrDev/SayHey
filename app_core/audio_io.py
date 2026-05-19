@@ -42,8 +42,6 @@ class AudioInputSource:
         on_speech_start: Optional[SpeechStartCallback] = None,
         speech_threshold: float = 0.012,
         speech_cooldown_seconds: float = 1.2,
-        silence_throttle_enabled: bool = True,
-        silence_throttle_seconds: float = 3.0,
     ) -> None:
         self.device = device
         self.source_sample_rate = source_sample_rate
@@ -55,13 +53,9 @@ class AudioInputSource:
         self.on_speech_start = on_speech_start
         self.speech_threshold = speech_threshold
         self.speech_cooldown_seconds = speech_cooldown_seconds
-        self.silence_throttle_enabled = silence_throttle_enabled
-        self.silence_throttle_seconds = silence_throttle_seconds
         self.stream: Optional[sd.InputStream] = None
         self.last_level_report = 0.0
         self.last_speech_start = 0.0
-        self.last_voiced_time = 0.0
-        self.throttled = False
 
     def start(self) -> None:
         blocksize = int(self.source_sample_rate * self.chunk_ms / 1000)
@@ -97,33 +91,8 @@ class AudioInputSource:
         if self.on_status and now - self.last_level_report > 2.5:
             self.on_status(f"[mic-level] {level:.4f}")
             self.last_level_report = now
-        if self._should_skip(level, now):
-            return
         mono = self._resample_if_needed(mono)
         self.on_audio(mono.tobytes())
-
-    def _should_skip(self, level: float, now: float) -> bool:
-        if not self.silence_throttle_enabled:
-            return False
-        if level >= self.speech_threshold:
-            self.last_voiced_time = now
-            if self.throttled:
-                self.throttled = False
-                if self.on_status:
-                    self.on_status("[mic-throttle] resume (voice detected)")
-            return False
-        if self.last_voiced_time == 0.0:
-            self.last_voiced_time = now
-            return False
-        if now - self.last_voiced_time >= self.silence_throttle_seconds:
-            if not self.throttled:
-                self.throttled = True
-                if self.on_status:
-                    self.on_status(
-                        f"[mic-throttle] paused (silence > {self.silence_throttle_seconds:.0f}s)"
-                    )
-            return True
-        return False
 
     def _resample_if_needed(self, audio: np.ndarray) -> np.ndarray:
         if self.source_sample_rate == self.target_sample_rate or audio.size == 0:

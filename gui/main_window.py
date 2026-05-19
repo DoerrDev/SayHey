@@ -160,9 +160,10 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self, s: AppSettings) -> None:
         self._header.set_usage_visible(s.usage_tracking_enabled)
+        self._header.set_usage_mode(s.usage_chip_show_token)
         if s.usage_tracking_enabled:
             st = self._usage_tracker.state
-            self._header.set_usage(st.session_cost, st.total_cost)
+            self._header.set_usage(st.session_cost, st.total_cost, st.session_tokens, st.total_tokens)
         self._mic_panel.set_mic_by_index(s.mic_input_index)
         self._mic_panel.set_engine(s.translator_engine)
         self._mic_panel.set_source_language(s.s2s_source_language)
@@ -334,7 +335,8 @@ class MainWindow(QMainWindow):
     @Slot(float, float)
     def _on_usage_updated(self, session_cost: float, total_cost: float) -> None:
         if self._store.get().usage_tracking_enabled:
-            self._header.set_usage(session_cost, total_cost)
+            st = self._usage_tracker.state
+            self._header.set_usage(st.session_cost, st.total_cost, st.session_tokens, st.total_tokens)
 
     @Slot()
     def _open_usage(self) -> None:

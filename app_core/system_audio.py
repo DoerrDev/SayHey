@@ -32,8 +32,6 @@ class SystemAudioCapture:
         source_sample_rate: int = 48000,
         speech_threshold: float = 0.01,
         speech_cooldown_seconds: float = 1.5,
-        silence_throttle_enabled: bool = True,
-        silence_throttle_seconds: float = 3.0,
     ) -> None:
         self.device_name = device_name
         self.source_sample_rate = source_sample_rate
@@ -45,14 +43,10 @@ class SystemAudioCapture:
         self.on_error = on_error
         self.speech_threshold = speech_threshold
         self.speech_cooldown_seconds = speech_cooldown_seconds
-        self.silence_throttle_enabled = silence_throttle_enabled
-        self.silence_throttle_seconds = silence_throttle_seconds
         self.stop_event = threading.Event()
         self.thread: Optional[threading.Thread] = None
         self.last_level_report = 0.0
         self.last_speech_start = 0.0
-        self.last_voiced_time = 0.0
-        self.throttled = False
 
     def start(self) -> None:
         self.stop_event.clear()
@@ -81,8 +75,6 @@ class SystemAudioCapture:
                     frames = recorder.record(numframes=chunk_frames)
                     pcm = self._frames_to_pcm16_mono(frames)
                     self._report_level_and_speech(pcm)
-                    if self._should_skip_chunk(pcm):
-                        continue
                     self.on_audio(pcm.tobytes())
         except Exception as exc:
             if self.on_error:
@@ -132,31 +124,6 @@ class SystemAudioCapture:
         source_positions = np.arange(audio.shape[0], dtype=np.float32)
         target_positions = np.linspace(0, audio.shape[0] - 1, output_frames, dtype=np.float32)
         return np.interp(target_positions, source_positions, audio).astype(np.float32)
-
-    def _should_skip_chunk(self, pcm: np.ndarray) -> bool:
-        if not self.silence_throttle_enabled or pcm.size == 0:
-            return False
-        level = float(np.sqrt(np.mean(np.square(pcm.astype(np.float32)))) / np.iinfo(np.int16).max)
-        now = time.monotonic()
-        if level >= self.speech_threshold:
-            self.last_voiced_time = now
-            if self.throttled:
-                self.throttled = False
-                if self.on_status:
-                    self.on_status("[game-audio-throttle] resume (voice detected)")
-            return False
-        if self.last_voiced_time == 0.0:
-            self.last_voiced_time = now
-            return False
-        if now - self.last_voiced_time >= self.silence_throttle_seconds:
-            if not self.throttled:
-                self.throttled = True
-                if self.on_status:
-                    self.on_status(
-                        f"[game-audio-throttle] paused (silence > {self.silence_throttle_seconds:.0f}s)"
-                    )
-            return True
-        return False
 
     def _report_level_and_speech(self, pcm: np.ndarray) -> None:
         if pcm.size == 0:

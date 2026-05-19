@@ -5,6 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -19,13 +20,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.usage_tracker import UsageTracker
+from core.usage_tracker import PRICE_PER_MTOKEN, UsageTracker
 
 
 class UsageDialog(QDialog):
     def __init__(self, tracker: UsageTracker, parent=None) -> None:
         super().__init__(parent)
         self._tracker = tracker
+        self._show_rmb = False
         self.setWindowTitle("用量与费用")
         self.resize(760, 520)
         self._build_ui()
@@ -36,10 +38,35 @@ class UsageDialog(QDialog):
         root.setContentsMargins(16, 14, 16, 14)
         root.setSpacing(10)
 
-        # Summary
+        # Summary + mode toggle
+        top_row = QHBoxLayout()
         self._summary = QLabel()
         self._summary.setStyleSheet("color:#eef7ff; font-size:13px;")
-        root.addWidget(self._summary)
+        top_row.addWidget(self._summary, 1)
+
+        self._btn_token = QPushButton("Token")
+        self._btn_rmb = QPushButton("人民币")
+        for btn in (self._btn_token, self._btn_rmb):
+            btn.setCheckable(True)
+            btn.setFixedHeight(24)
+            btn.setStyleSheet(
+                "QPushButton{padding:0 10px;border:1px solid #4a6fa5;border-radius:3px;font-size:12px;}"
+                "QPushButton:checked{background:#4a6fa5;color:#fff;}"
+                "QPushButton:!checked{background:transparent;color:#aac;}"
+            )
+        self._btn_token.setChecked(True)
+        grp = QButtonGroup(self)
+        grp.setExclusive(True)
+        grp.addButton(self._btn_token)
+        grp.addButton(self._btn_rmb)
+        self._btn_token.toggled.connect(lambda checked: self._on_mode_toggle(checked))
+
+        toggle_row = QHBoxLayout()
+        toggle_row.setSpacing(0)
+        toggle_row.addWidget(self._btn_token)
+        toggle_row.addWidget(self._btn_rmb)
+        top_row.addLayout(toggle_row)
+        root.addLayout(top_row)
 
         tabs = QTabWidget()
         tabs.addTab(self._build_events_tab(), "明细")
@@ -57,14 +84,15 @@ class UsageDialog(QDialog):
         btn_row.addWidget(close_btn)
         root.addLayout(btn_row)
 
+    def _on_mode_toggle(self, token_checked: bool) -> None:
+        self._show_rmb = not token_checked
+        self._refresh()
+
     def _build_events_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(0, 6, 0, 0)
         self._events_tbl = QTableWidget(0, 7)
-        self._events_tbl.setHorizontalHeaderLabels(
-            ["时间", "来源", "时长(ms)", "input_audio", "output_text", "output_audio", "费用(元)"]
-        )
         self._events_tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._events_tbl.verticalHeader().setVisible(False)
         self._events_tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -103,15 +131,32 @@ class UsageDialog(QDialog):
         )
 
         # Events (latest 500)
+        if self._show_rmb:
+            self._events_tbl.setHorizontalHeaderLabels(
+                ["时间", "来源", "时长(ms)", "音频输入(元)", "文本输出(元)", "音频输出(元)", "合计(元)"]
+            )
+        else:
+            self._events_tbl.setHorizontalHeaderLabels(
+                ["时间", "来源", "时长(ms)", "input_audio", "output_text", "output_audio", "合计(元)"]
+            )
+
         evs = st.events[-500:][::-1]
         self._events_tbl.setRowCount(len(evs))
         for r, e in enumerate(evs):
             self._events_tbl.setItem(r, 0, QTableWidgetItem(e.ts))
             self._events_tbl.setItem(r, 1, QTableWidgetItem(e.source))
             self._events_tbl.setItem(r, 2, QTableWidgetItem(str(e.duration_ms)))
-            self._events_tbl.setItem(r, 3, QTableWidgetItem(str(int(e.tokens.get("input_audio_tokens", 0)))))
-            self._events_tbl.setItem(r, 4, QTableWidgetItem(str(int(e.tokens.get("output_text_tokens", 0)))))
-            self._events_tbl.setItem(r, 5, QTableWidgetItem(str(int(e.tokens.get("output_audio_tokens", 0)))))
+            if self._show_rmb:
+                ia = e.tokens.get("input_audio_tokens", 0.0) * PRICE_PER_MTOKEN.get("input_audio_tokens", 0.0) / 1_000_000.0
+                ot = e.tokens.get("output_text_tokens", 0.0) * PRICE_PER_MTOKEN.get("output_text_tokens", 0.0) / 1_000_000.0
+                oa = e.tokens.get("output_audio_tokens", 0.0) * PRICE_PER_MTOKEN.get("output_audio_tokens", 0.0) / 1_000_000.0
+                self._events_tbl.setItem(r, 3, QTableWidgetItem(f"{ia:.6f}"))
+                self._events_tbl.setItem(r, 4, QTableWidgetItem(f"{ot:.6f}"))
+                self._events_tbl.setItem(r, 5, QTableWidgetItem(f"{oa:.6f}"))
+            else:
+                self._events_tbl.setItem(r, 3, QTableWidgetItem(str(int(e.tokens.get("input_audio_tokens", 0)))))
+                self._events_tbl.setItem(r, 4, QTableWidgetItem(str(int(e.tokens.get("output_text_tokens", 0)))))
+                self._events_tbl.setItem(r, 5, QTableWidgetItem(str(int(e.tokens.get("output_audio_tokens", 0)))))
             self._events_tbl.setItem(r, 6, QTableWidgetItem(f"{e.cost:.6f}"))
 
         # Daily

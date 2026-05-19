@@ -30,8 +30,6 @@ class GameSubtitleConfig:
     source_sample_rate: int = 48000
     chunk_ms: int = 80
     engine_name: str = "huoshan_s2t"
-    silence_throttle_enabled: bool = True
-    silence_throttle_seconds: float = 3.0
 
 
 class GameSubtitleController:
@@ -80,8 +78,6 @@ class GameSubtitleController:
                 on_status=self._emit_status,
                 on_speech_start=self._handle_speech_start,
                 on_error=self._handle_capture_error,
-                silence_throttle_enabled=self.config.silence_throttle_enabled,
-                silence_throttle_seconds=self.config.silence_throttle_seconds,
             )
             self.capture.start()
             while not self.stop_event.is_set():
@@ -172,6 +168,4 @@ def build_game_subtitle_config(env_path: Path) -> GameSubtitleConfig:
         audio_device_name=os.environ.get("GAME_AUDIO_DEVICE_NAME", "").strip() or None,
         chunk_ms=int(os.environ.get("GAME_SUBTITLE_CHUNK_MS", "80").strip()),
         engine_name=os.environ.get("GAME_SUBTITLE_ENGINE", "huoshan_s2t").strip(),
-        silence_throttle_enabled=os.environ.get("SILENCE_THROTTLE_ENABLED", "1").strip() not in {"0", "false", "False"},
-        silence_throttle_seconds=float(os.environ.get("SILENCE_THROTTLE_SECONDS", "3.0").strip()),
     )

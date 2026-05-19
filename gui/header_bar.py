@@ -27,6 +27,11 @@ class HeaderBar(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._show_token = False
+        self._session_cost = 0.0
+        self._total_cost = 0.0
+        self._session_tokens = 0
+        self._total_tokens = 0
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -66,9 +71,7 @@ class HeaderBar(QWidget):
         title_block.addWidget(subtitle)
         layout.addLayout(title_block)
 
-        layout.addStretch()
-
-        # Usage cost chip (hidden unless tracking enabled)
+        # Usage cost chip — anchored left, next to title banner
         self._usage_chip = QPushButton("¥0.0000 · 累计 ¥0.00")
         self._usage_chip.setObjectName("statusChip")
         self._usage_chip.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -78,7 +81,7 @@ class HeaderBar(QWidget):
         self._usage_chip.clicked.connect(self.sig_open_usage.emit)
         layout.addWidget(self._usage_chip)
 
-        layout.addSpacing(8)
+        layout.addStretch()
 
         # Status chip (hidden when idle)
         self._status_label = QLabel("")
@@ -115,8 +118,22 @@ class HeaderBar(QWidget):
     def set_usage_visible(self, visible: bool) -> None:
         self._usage_chip.setVisible(visible)
 
-    def set_usage(self, session_cost: float, total_cost: float) -> None:
-        self._usage_chip.setText(f"¥{session_cost:.4f} · 累计 ¥{total_cost:.2f}")
+    def set_usage_mode(self, show_token: bool) -> None:
+        self._show_token = show_token
+        self._update_chip_text()
+
+    def set_usage(self, session_cost: float, total_cost: float, session_tokens: int = 0, total_tokens: int = 0) -> None:
+        self._session_cost = session_cost
+        self._total_cost = total_cost
+        self._session_tokens = session_tokens
+        self._total_tokens = total_tokens
+        self._update_chip_text()
+
+    def _update_chip_text(self) -> None:
+        if self._show_token:
+            self._usage_chip.setText(f"{self._session_tokens:,} tokens · 累计 {self._total_tokens:,}")
+        else:
+            self._usage_chip.setText(f"¥{self._session_cost:.4f} · 累计 ¥{self._total_cost:.2f}")
 
     def set_status(self, text: str, kind: str = "normal") -> None:
         """kind: 'normal', 'warn', 'error'. Chip hidden when idle."""

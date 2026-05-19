@@ -38,9 +38,10 @@ class AppSettings:
     overlay_max_lines: int = 2
     overlay_text_color: str = "#ffffff"
     overlay_width: int = 800
-    silence_throttle_enabled: bool = True
-    silence_throttle_seconds: float = 3.0
     usage_tracking_enabled: bool = False
+    usage_chip_show_token: bool = True
+    auto_switch_default_mic: bool = False
+    auto_switch_mic_keyword: str = "CABLE Output"
 
 
 class SettingsStore:
@@ -136,8 +137,6 @@ class SettingsStore:
             "GAME_SUBTITLE_TARGET_LANGUAGE": s.game_subtitle_target_language,
             "GAME_AUDIO_DEVICE_NAME": s.game_audio_device_name,
         }
-        overrides["SILENCE_THROTTLE_ENABLED"] = "1" if s.silence_throttle_enabled else "0"
-        overrides["SILENCE_THROTTLE_SECONDS"] = str(s.silence_throttle_seconds)
         if s.mic_input_index is not None:
             overrides["MIC_INPUT_INDEX"] = str(s.mic_input_index)
         elif "MIC_INPUT_INDEX" in os.environ:

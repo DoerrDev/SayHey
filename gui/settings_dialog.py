@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -184,24 +183,6 @@ class SettingsDialog(QDialog):
         refresh_btn.clicked.connect(self._populate_mic_combo)
         form.addRow("", refresh_btn)
 
-        form.addRow(_section_title("节流（省钱）"))
-
-        self._silence_throttle = QCheckBox("启用本地静音节流")
-        self._silence_throttle.setToolTip(
-            "开启后，本地实时检测音量；连续 N 秒静音则暂停向火山推送音频，\n"
-            "侦测到声音立即恢复（WebSocket 保持连接，无重连延迟）。\n"
-            "可避免全程把无声音频推给服务端导致按时长计费扣钱。\n"
-            "适用于 S2T 游戏字幕和 S2S 麦克风翻译。"
-        )
-        form.addRow("", self._silence_throttle)
-
-        self._silence_throttle_seconds = QDoubleSpinBox()
-        self._silence_throttle_seconds.setRange(0.5, 30.0)
-        self._silence_throttle_seconds.setSingleStep(0.5)
-        self._silence_throttle_seconds.setSuffix(" 秒")
-        self._silence_throttle_seconds.setToolTip("连续静音超过该时长后暂停推流，默认 3 秒")
-        form.addRow("静音判定时长", self._silence_throttle_seconds)
-
         return w
 
     def _build_overlay_tab(self) -> QWidget:
@@ -271,6 +252,9 @@ class SettingsDialog(QDialog):
             "数据保存在本地 usage_data.json。默认关闭。"
         )
         form.addRow("", self._usage_tracking)
+
+        self._usage_chip_show_token = QCheckBox("顶栏 chip 显示 Token 数量（默认显示人民币）")
+        form.addRow("", self._usage_chip_show_token)
 
         note = QLabel(
             "依据火山引擎计费(每百万 token):\n"
@@ -348,9 +332,8 @@ class SettingsDialog(QDialog):
         self._color_value = s.overlay_text_color
         self._update_color_preview()
         self._click_through.setChecked(s.overlay_click_through)
-        self._silence_throttle.setChecked(s.silence_throttle_enabled)
-        self._silence_throttle_seconds.setValue(s.silence_throttle_seconds)
         self._usage_tracking.setChecked(s.usage_tracking_enabled)
+        self._usage_chip_show_token.setChecked(s.usage_chip_show_token)
 
     def _collect(self) -> AppSettings:
         s = self._store.get()
@@ -374,9 +357,8 @@ class SettingsDialog(QDialog):
             overlay_width=self._overlay_width.value(),
             overlay_text_color=self._color_value,
             overlay_click_through=self._click_through.isChecked(),
-            silence_throttle_enabled=self._silence_throttle.isChecked(),
-            silence_throttle_seconds=self._silence_throttle_seconds.value(),
             usage_tracking_enabled=self._usage_tracking.isChecked(),
+            usage_chip_show_token=self._usage_chip_show_token.isChecked(),
         )
 
     @Slot()

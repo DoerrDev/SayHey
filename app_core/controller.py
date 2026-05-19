@@ -38,8 +38,6 @@ class AppConfig:
     openai_api_key: str = ""
     openai_ws_url: str = "wss://translate.doerr.work/v1/realtime/translations"
     openai_model: str = "gpt-realtime-translate"
-    silence_throttle_enabled: bool = True
-    silence_throttle_seconds: float = 3.0
 
 
 class VoiceTranslatorController:
@@ -88,18 +86,8 @@ class VoiceTranslatorController:
                 f"Output #{cable_input.index} {cable_input.name} ({int(cable_input.default_samplerate)} Hz)"
             )
 
-            self.output_sink = AudioOutputSink(
-                device=cable_input,
-                source_sample_rate=self.config.sample_rate,
-                output_sample_rate=int(cable_input.default_samplerate),
-                source_channels=1,
-                output_channels=min(max(1, self.config.output_channels), cable_input.max_output_channels),
-                record_dir=self.config.translated_record_dir,
-                record_wav=self.config.audio_route.record_translated_wav,
-                on_status=self._emit_status,
-                on_first_write=self._handle_output_first_write,
-            )
-            self.output_sink.start()
+            cable_candidates = self.resolver.stable_output_candidates(cable_input)
+            self.output_sink = self._start_output_with_fallback(cable_candidates)
 
             self.engine = self._build_engine()
             await self.engine.start(
@@ -147,6 +135,33 @@ class VoiceTranslatorController:
                 except RuntimeError:
                     return
 
+    def _start_output_with_fallback(self, devices: list[AudioDevice]) -> AudioOutputSink:
+        last_error: Optional[Exception] = None
+        for device in devices:
+            sink = AudioOutputSink(
+                device=device,
+                source_sample_rate=self.config.sample_rate,
+                output_sample_rate=int(device.default_samplerate),
+                source_channels=1,
+                output_channels=min(max(1, self.config.output_channels), device.max_output_channels),
+                record_dir=self.config.translated_record_dir,
+                record_wav=self.config.audio_route.record_translated_wav,
+                on_status=self._emit_status,
+                on_first_write=self._handle_output_first_write,
+            )
+            try:
+                sink.start()
+                self._emit_status(
+                    f"Output active: #{device.index} {device.name} | {device.hostapi} "
+                    f"({int(device.default_samplerate)} Hz)"
+                )
+                return sink
+            except Exception as exc:
+                last_error = exc
+                sink.stop()
+                self._emit_status(f"Output backend failed: #{device.index} {device.hostapi}: {exc}")
+        raise RuntimeError(f"Unable to start output stream. Last error: {last_error}")
+
     def _start_input_with_fallback(self, devices: list[AudioDevice]) -> None:
         last_error: Optional[Exception] = None
         for device in devices:
@@ -159,8 +174,6 @@ class VoiceTranslatorController:
                 on_audio=self._send_audio_from_callback,
                 on_status=self._emit_status,
                 on_speech_start=self._handle_speech_start,
-                silence_throttle_enabled=self.config.silence_throttle_enabled,
-                silence_throttle_seconds=self.config.silence_throttle_seconds,
             )
             try:
                 source.start()
@@ -326,6 +339,4 @@ def build_app_config(env_path: Path) -> AppConfig:
             default_openai_ws_url,
         ).strip(),
         openai_model=os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-translate").strip(),
-        silence_throttle_enabled=os.environ.get("SILENCE_THROTTLE_ENABLED", "1").strip() not in {"0", "false", "False"},
-        silence_throttle_seconds=float(os.environ.get("SILENCE_THROTTLE_SECONDS", "3.0").strip()),
     )

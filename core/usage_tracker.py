@@ -36,8 +36,10 @@ class UsageEvent:
 class UsageState:
     session_cost: float = 0.0
     session_events: int = 0
+    session_tokens: int = 0
     total_cost: float = 0.0
     total_events: int = 0
+    total_tokens: int = 0
     daily: dict[str, dict] = field(default_factory=dict)  # date -> {cost, events, tokens{}}
     events: list[UsageEvent] = field(default_factory=list)
 
@@ -111,6 +113,7 @@ class UsageTracker:
         with self._lock:
             self.state.session_cost = 0.0
             self.state.session_events = 0
+            self.state.session_tokens = 0
         self._notify()
 
     def feed_log_line(self, line: str) -> None:
@@ -125,10 +128,13 @@ class UsageTracker:
 
     def _record(self, ev: UsageEvent) -> None:
         with self._lock:
+            ev_tokens = int(sum(ev.tokens.values()))
             self.state.session_cost += ev.cost
             self.state.session_events += 1
+            self.state.session_tokens += ev_tokens
             self.state.total_cost += ev.cost
             self.state.total_events += 1
+            self.state.total_tokens += ev_tokens
             day = ev.ts[:10]
             bucket = self.state.daily.setdefault(day, {"cost": 0.0, "events": 0, "tokens": {}})
             bucket["cost"] += ev.cost
@@ -152,6 +158,7 @@ class UsageTracker:
         data = {
             "total_cost": self.state.total_cost,
             "total_events": self.state.total_events,
+            "total_tokens": self.state.total_tokens,
             "daily": self.state.daily,
             "events": [
                 {
@@ -180,6 +187,7 @@ class UsageTracker:
             return
         self.state.total_cost = float(data.get("total_cost", 0.0))
         self.state.total_events = int(data.get("total_events", 0))
+        self.state.total_tokens = int(data.get("total_tokens", 0))
         self.state.daily = data.get("daily", {}) or {}
         evs = data.get("events", []) or []
         self.state.events = [
