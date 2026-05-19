@@ -31,6 +31,8 @@ class OpenAIRealtimeTranslateEngine:
         self.audio_segment_id = 0
         self.in_audio_segment = False
         self.current_audio_item_id = ""
+        self._source_acc = ""
+        self._translation_acc = ""
 
     async def start(self, config: TranslatorConfig, on_event: TranslatorEventCallback) -> None:
         if not self.api_key:
@@ -164,15 +166,19 @@ class OpenAIRealtimeTranslateEngine:
         if event_type in {"session.created", "session.updated"}:
             self._emit("status", message=f"[openai] {event_type}")
         elif event_type == "conversation.item.input_audio_transcription.delta":
-            self._emit("source_text", text=event.get("delta", ""))
+            self._source_acc += event.get("delta", "")
+            self._emit("source_text", text=self._source_acc)
         elif event_type == "conversation.item.input_audio_transcription.completed":
-            self._emit("source_text", text=event.get("transcript", ""))
+            transcript = event.get("transcript", "")
+            self._source_acc = transcript
+            self._emit("source_text", text=transcript)
         elif event_type in {
             "response.output_audio_transcript.delta",
             "session.output_audio_transcript.delta",
             "session.output_transcript.delta",
         }:
-            self._emit("translated_text", text=event.get("delta", ""))
+            self._translation_acc += event.get("delta", "")
+            self._emit("translated_text", text=self._translation_acc)
         elif event_type in {
             "response.output_audio_transcript.done",
             "session.output_audio_transcript.done",
@@ -180,7 +186,10 @@ class OpenAIRealtimeTranslateEngine:
         }:
             transcript = event.get("transcript") or event.get("text") or ""
             if transcript:
+                self._translation_acc = transcript
                 self._emit("translated_text", text=transcript)
+            self._translation_acc = ""
+            self._source_acc = ""
             self._emit("status", message="[openai] transcript done")
         elif event_type in {"response.output_audio.delta", "session.output_audio.delta"}:
             item_id = self._output_item_key(event)

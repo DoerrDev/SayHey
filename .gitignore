@@ -4,6 +4,7 @@ openapi.env
 settings.json
 
 # Runtime output
+usage_data.json
 logs/
 recordings/
 recordings_s2s/

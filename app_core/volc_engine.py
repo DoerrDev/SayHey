@@ -35,6 +35,8 @@ class VolcAstS2SEngine:
         self.dropped_audio_chunks = 0
         self.seen_source = ""
         self.seen_translation = ""
+        self._source_acc = ""
+        self._translation_acc = ""
         self.audio_segment_id = 0
 
     async def start(self, config: TranslatorConfig, on_event: TranslatorEventCallback) -> None:
@@ -153,15 +155,21 @@ class VolcAstS2SEngine:
             self._emit("status", message=f"[session] started: {self.session_id}")
         elif response.event == Type.SourceSubtitleResponse and response.text != self.seen_source:
             self.seen_source = response.text
-            self._emit("source_text", text=response.text)
+            self._source_acc += response.text
+            self._emit("source_text", text=self._source_acc)
         elif response.event == Type.TranslationSubtitleResponse and response.text != self.seen_translation:
             self.seen_translation = response.text
-            self._emit("translated_text", text=response.text)
+            self._translation_acc += response.text
+            self._emit("translated_text", text=self._translation_acc)
         elif response.event == Type.TTSResponse and response.data:
             self._emit("translated_audio", data=response.data, segment_id=self.audio_segment_id)
             self._emit("status", message=f"[tts] {len(response.data)} bytes")
         elif response.event == Type.TTSSentenceStart:
             self.audio_segment_id += 1
+            self._source_acc = ""
+            self._translation_acc = ""
+            self.seen_source = ""
+            self.seen_translation = ""
             self._emit("status", message="[tts] sentence start")
         elif response.event == Type.TTSSentenceEnd:
             self._emit("status", message="[tts] sentence end")
