@@ -27,6 +27,7 @@ class HeaderBar(QWidget):
     sig_adjust_overlay = Signal(bool)  # True = enter drag mode, False = exit
     sig_open_settings = Signal()
     sig_open_usage = Signal()
+    sig_open_feedback = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -112,6 +113,13 @@ class HeaderBar(QWidget):
         self._adjust_btn.setCheckable(True)
         self._adjust_btn.toggled.connect(self.sig_adjust_overlay.emit)
         layout.addWidget(self._adjust_btn)
+
+        feedback_btn = QPushButton("提需求")
+        feedback_btn.setObjectName("secondary")
+        feedback_btn.setFixedWidth(80)
+        feedback_btn.setToolTip("快速提交需求/反馈，将同步到 GitHub Issue")
+        feedback_btn.clicked.connect(self.sig_open_feedback.emit)
+        layout.addWidget(feedback_btn)
 
         settings_btn = QToolButton()
         settings_btn.setText("⚙")

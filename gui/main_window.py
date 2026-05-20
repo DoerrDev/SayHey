@@ -27,6 +27,7 @@ from gui.header_bar import HeaderBar
 from gui.log_panel import RuntimeLogPanel
 from gui.mic_panel import MicTranslatePanel
 from gui.overlay_window import SubtitleOverlay
+from gui.feedback_dialog import FeedbackDialog
 from gui.settings_dialog import SettingsDialog
 from gui.usage_dialog import UsageDialog
 from gui.voice_selector_dialog import VoiceSelectorDialog
@@ -69,6 +70,14 @@ class MainWindow(QMainWindow):
 
         from core.update_checker import start_check
         self._update_thread = start_check(self._on_update_check)
+
+        # Start message poller (server → client push via polling)
+        from core.message_poller import MessagePoller
+        api_base = store.get().volc_trial_api_base
+        self._msg_poller = MessagePoller(api_base, interval_sec=30, parent=self)
+        self._msg_poller.sig_message.connect(self._on_admin_message)
+        self._msg_poller.start()
+        self._last_feedback_name = ""
 
     def _on_update_check(self, info) -> None:
         if info and info.has_update:
@@ -138,6 +147,7 @@ class MainWindow(QMainWindow):
         self._header.sig_adjust_overlay.connect(self._overlay.set_drag_mode)
         self._header.sig_open_settings.connect(self._open_settings)
         self._header.sig_open_usage.connect(self._open_usage)
+        self._header.sig_open_feedback.connect(self._open_feedback)
         self.sig_usage_updated.connect(self._on_usage_updated)
 
         # Game panel
@@ -351,6 +361,19 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     @Slot()
+    def _open_feedback(self) -> None:
+        api_base = self._store.get().volc_trial_api_base
+        dlg = FeedbackDialog(api_base, default_name=self._last_feedback_name, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self._last_feedback_name = dlg._name_input.text().strip()
+            self._log_panel.append("需求已提交，等待开发者反馈")
+
+    @Slot(int, str, str)
+    def _on_admin_message(self, mid: int, content: str, created_at: str) -> None:
+        self._log_panel.append(f"📩 开发者消息: {content}")
+        QMessageBox.information(self, "来自开发者的消息", content)
+
+    @Slot()
     def _toggle_overlay(self) -> None:
         if self._overlay.isVisible():
             self._overlay.hide()
@@ -408,5 +431,8 @@ class MainWindow(QMainWindow):
         if self._game_thread and self._game_thread.isRunning():
             self._game_thread.request_stop()
             self._game_thread.wait(3000)
+        if getattr(self, "_msg_poller", None) and self._msg_poller.isRunning():
+            self._msg_poller.request_stop()
+            self._msg_poller.wait(2000)
         self._overlay.close()
         super().closeEvent(event)
