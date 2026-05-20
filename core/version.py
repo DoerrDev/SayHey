@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # CI on tag push (v*) overwrites this constant via scripts/stamp_version.py
 # before Nuitka build. Dev runs fall back to `git describe` for live tag info.
-__version__ = "0.0.1"
+__version__ = "v0.2.0"
 
 
 def _git_describe() -> str:
@@ -19,5 +19,5 @@ def _git_describe() -> str:
         return __version__
 
 
-if __version__ == "0.0.1":
+if __version__ == "v0.2.0":
     __version__ = _git_describe()
