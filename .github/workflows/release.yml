@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        shell: cmd
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "nuitka>=2.4" zstandard
+
+      - name: Build SayHey main
+        shell: cmd
+        run: |
+          python -m nuitka ^
+            --mode=standalone ^
+            --windows-console-mode=disable ^
+            --output-dir=dist ^
+            --output-filename=sayhey ^
+            --windows-icon-from-ico=resource\app-icon.ico ^
+            --plugin-enable=pyside6 ^
+            --include-package=app_core ^
+            --include-package=gui ^
+            --include-package=core ^
+            --include-package=python_protogen ^
+            --include-data-dir=resource=resource ^
+            --include-module=sounddevice ^
+            --include-module=soundcard ^
+            --include-package-data=soundcard ^
+            --include-package=websockets ^
+            --include-module=google.protobuf ^
+            --include-module=numpy ^
+            --include-module=numpy.core ^
+            --follow-imports ^
+            --assume-yes-for-downloads ^
+            --lto=no ^
+            --jobs=2 ^
+            main.py
+
+      - name: Build updater
+        shell: cmd
+        working-directory: tools/updater
+        run: |
+          python -m nuitka ^
+            --standalone --onefile ^
+            --windows-console-mode=disable ^
+            --output-filename=updater.exe ^
+            --output-dir=build_out ^
+            updater.py
+
+      - name: Package dist
+        shell: pwsh
+        run: |
+          if (Test-Path dist/sayhey) { Remove-Item -Recurse -Force dist/sayhey }
+          Rename-Item dist/main.dist dist/sayhey
+          Copy-Item tools/updater/build_out/updater.exe dist/sayhey/updater.exe
+          Compress-Archive -Path dist/sayhey/* -DestinationPath dist/sayhey-windows.zip -Force
+
+      - name: Create GitHub Release
+        id: gh_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/sayhey-windows.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      - name: Push mirror to Gitee
+        shell: bash
+        env:
+          GITEE_USER: ${{ secrets.GITEE_USER }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          git remote add gitee "https://${GITEE_USER}:${GITEE_TOKEN}@gitee.com/chenjunbin2345/SayHey.git"
+          git push gitee HEAD:main --force
+          git push gitee "${GITHUB_REF}" --force
+
+      - name: Mirror release to Gitee
+        shell: bash
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GH_RELEASE_BODY: ${{ steps.gh_release.outputs.body }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF##*/}"
+          REPO="chenjunbin2345/SayHey"
+          NOTES="${GH_RELEASE_BODY:-Auto release $TAG}"
+
+          # 1) create gitee release
+          RID=$(curl -sf -X POST "https://gitee.com/api/v5/repos/${REPO}/releases" \
+            -H "Content-Type: application/json;charset=UTF-8" \
+            -d "$(jq -nc --arg t "$GITEE_TOKEN" --arg tag "$TAG" --arg name "$TAG" \
+                          --arg body "$NOTES" --arg br "main" \
+              '{access_token:$t, tag_name:$tag, name:$name, body:$body,
+                prerelease:false, target_commitish:$br}')" \
+            | jq -r .id)
+          echo "Gitee release id: $RID"
+
+          # 2) upload zip asset
+          curl -sf -X POST \
+            "https://gitee.com/api/v5/repos/${REPO}/releases/${RID}/attach_files" \
+            -F "access_token=${GITEE_TOKEN}" \
+            -F "file=@dist/sayhey-windows.zip"
