@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import threading
 
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Qt, QSize, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -15,6 +15,15 @@ from PySide6.QtWidgets import (
 
 from app_core.audio_devices import DeviceResolver
 from app_core.audio_io import AudioRouteVerifier
+from gui.icons import icon_path
+
+
+_DOT_TO_ICON = {
+    "dotGreen": "check",
+    "dotOrange": "warning",
+    "dotRed": "warning",
+    "dotGray": "warning",
+}
 
 
 class _CheckRow(QWidget):
@@ -24,10 +33,11 @@ class _CheckRow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        self._dot = QLabel("●")
-        self._dot.setObjectName(dot_name)
-        self._dot.setFixedWidth(20)
-        layout.addWidget(self._dot)
+        self._icon = QLabel()
+        self._icon.setFixedSize(20, 20)
+        self._icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._icon)
+        self.set_dot(dot_name)
 
         self._label = QLabel(text)
         self._label.setWordWrap(True)
@@ -42,9 +52,18 @@ class _CheckRow(QWidget):
             layout.addWidget(self._btn)
 
     def set_dot(self, name: str) -> None:
-        self._dot.setObjectName(name)
-        self._dot.setStyleSheet("")  # force QSS re-evaluation
-        self._dot.style().polish(self._dot)
+        icon_name = _DOT_TO_ICON.get(name, "warning")
+        p = icon_path(icon_name)
+        pm = QPixmap(str(p)) if p.exists() else QPixmap()
+        if not pm.isNull():
+            self._icon.setPixmap(
+                pm.scaled(
+                    16,
+                    16,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
 
     def set_text(self, text: str) -> None:
         self._label.setText(text)
@@ -56,6 +75,7 @@ class _CheckRow(QWidget):
 
 class DeviceChecklistPanel(QFrame):
     sig_status = Signal(str)
+    sig_summary = Signal(str, str, str)  # title, desc, kind('normal'|'warn'|'error')
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -94,12 +114,14 @@ class DeviceChecklistPanel(QFrame):
             self._cable_row.set_dot("dotGreen")
             self._cable_row.set_text(f"VB-Cable OK: {cable_in.name} → {cable_out.name}")
             self._download_row.setVisible(False)
+            self.sig_summary.emit("设备已就绪", "VB-Cable 检测通过，可直接开始", "normal")
         except Exception:
             self._cable_row.set_dot("dotRed")
             self._cable_row.set_text("VB-Cable 未找到，请安装后点击重新检测")
             self._download_row.setVisible(True)
             self._download_row.set_dot("dotOrange")
             self._download_row.set_text("需要安装 VB-Audio Cable 虚拟声卡")
+            self.sig_summary.emit("缺少虚拟声卡", "请先安装 VB-Cable 后重新检测", "error")
 
     def _open_download(self) -> None:
         QDesktopServices.openUrl(QUrl("https://vb-audio.com/Cable/"))
@@ -134,8 +156,11 @@ class DeviceChecklistPanel(QFrame):
     def _update_test_result(self, msg: str) -> None:
         if "OK" in msg:
             self._test_row.set_dot("dotGreen")
+            self.sig_summary.emit("设备已就绪", f"线路测试通过：{msg}", "normal")
         elif "silent" in msg.lower():
             self._test_row.set_dot("dotOrange")
+            self.sig_summary.emit("线路静音", "VB-Cable 测试无音频信号", "warn")
         else:
             self._test_row.set_dot("dotRed")
+            self.sig_summary.emit("线路测试失败", msg, "error")
         self._test_row.set_text(msg)

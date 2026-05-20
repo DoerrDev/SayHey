@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from gui.icons import icons_dir_qss
+
 STYLESHEET = """
 /* === Global === */
 QWidget {
@@ -25,6 +27,36 @@ QFrame#card {
     border-radius: 20px;
 }
 
+/* === Status card (header) === */
+QFrame#statusCard {
+    background: rgba(66, 221, 146, 0.08);
+    border: 1px solid rgba(66, 221, 146, 0.28);
+    border-radius: 12px;
+}
+QFrame#statusCard[kind="warn"] {
+    background: rgba(255, 209, 102, 0.08);
+    border-color: rgba(255, 209, 102, 0.35);
+}
+QFrame#statusCard[kind="error"] {
+    background: rgba(255, 80, 80, 0.08);
+    border-color: rgba(255, 80, 80, 0.32);
+}
+QLabel#statusCardTitle {
+    color: #ccffe4;
+    font-size: 13px;
+    font-weight: 900;
+}
+QFrame#statusCard[kind="warn"] QLabel#statusCardTitle {
+    color: #ffe6a5;
+}
+QFrame#statusCard[kind="error"] QLabel#statusCardTitle {
+    color: #ffb3b3;
+}
+QLabel#statusCardDesc {
+    color: #89a7bc;
+    font-size: 12px;
+}
+
 /* === Primary button === */
 QPushButton {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -36,6 +68,7 @@ QPushButton {
     border-radius: 12px;
     padding: 9px 18px;
     min-width: 70px;
+    min-height: 22px;
 }
 QPushButton:hover {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -146,6 +179,44 @@ QTextEdit#stageLarge {
     selection-background-color: rgba(66, 221, 146, 0.28);
 }
 
+/* === Empty state === */
+QLabel#emptyTitle {
+    color: #d5e5ef;
+    font-size: 22px;
+    font-weight: 900;
+}
+QLabel#emptyCopy {
+    color: #89a7bc;
+    font-size: 13px;
+}
+
+/* === Panel description === */
+QLabel#panelDesc {
+    color: #89a7bc;
+    font-size: 12px;
+}
+
+/* === Preview box (settings dialog) === */
+QFrame#previewBox {
+    border-radius: 16px;
+    border: 1px solid rgba(66, 221, 146, 0.24);
+    background: #081018;
+}
+QLabel#overlaySample {
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    color: #14f2ef;
+    font-size: 22px;
+    font-weight: 900;
+    padding: 12px 14px;
+}
+QLabel#previewLabel {
+    color: #89a7bc;
+    font-size: 12px;
+    font-weight: 800;
+}
+
 /* === Input / ComboBox === */
 QLineEdit {
     background: rgba(5, 10, 15, 0.80);
@@ -174,13 +245,10 @@ QComboBox::drop-down {
     width: 20px;
 }
 QComboBox::down-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 6px solid rgba(163, 207, 255, 0.55);
-    width: 0;
-    height: 0;
-    margin-right: 8px;
+    image: url({ICONS_DIR}/combobox-chevron-down.svg);
+    width: 12px;
+    height: 12px;
+    margin-right: 6px;
 }
 QComboBox QAbstractItemView {
     background: #111b25;
@@ -263,20 +331,14 @@ QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
     background: rgba(66, 221, 146, 0.18);
 }
 QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-bottom: 5px solid rgba(163, 207, 255, 0.65);
-    width: 0;
-    height: 0;
+    image: url({ICONS_DIR}/spinbox-chevron-up.svg);
+    width: 10px;
+    height: 10px;
 }
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid rgba(163, 207, 255, 0.65);
-    width: 0;
-    height: 0;
+    image: url({ICONS_DIR}/spinbox-chevron-down.svg);
+    width: 10px;
+    height: 10px;
 }
 QSlider::groove:horizontal {
     background: rgba(163, 207, 255, 0.12);
@@ -397,7 +459,7 @@ QLabel#dotGray {
 def apply_theme(app) -> None:
     from PySide6.QtGui import QFont
     app.setStyle("Fusion")
-    app.setStyleSheet(STYLESHEET)
+    app.setStyleSheet(STYLESHEET.replace("{ICONS_DIR}", icons_dir_qss()))
     font = QFont("Segoe UI Variable", 10)
     font.setStyleHint(QFont.StyleHint.SansSerif)
     app.setFont(font)

@@ -159,9 +159,11 @@ class MainWindow(QMainWindow):
         self._mic_panel.sig_stop_requested.connect(self._stop_mic)
         self._mic_panel.sig_test_cable.connect(self._test_cable)
         self._mic_panel.sig_select_voice.connect(self._open_voice_selector)
+        self._mic_panel.sig_overlay_toggle.connect(self._toggle_overlay)
 
         # Checklist
         self._checklist.sig_status.connect(self._on_status)
+        self._checklist.sig_summary.connect(self._header.set_status_card)
 
         # Cross-thread signals → main-thread slots
         self.sig_status.connect(self._on_status)

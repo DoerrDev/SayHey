@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, QSize, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QStackedLayout,
     QTextEdit,
     QVBoxLayout,
     QSizePolicy,
+    QWidget,
 )
 
 from app_core.audio_devices import AudioDevice, DeviceResolver
+from gui.icons import resource_icon
 from gui.subtitle_buffer import SubtitleBuffer
 
 HUOSHAN_LANGUAGES = [
@@ -64,6 +67,7 @@ class MicTranslatePanel(QFrame):
     sig_stop_requested = Signal()
     sig_test_cable = Signal()
     sig_select_voice = Signal()
+    sig_overlay_toggle = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -84,9 +88,20 @@ class MicTranslatePanel(QFrame):
 
         # Title
         title_row = QHBoxLayout()
+        title_block = QVBoxLayout()
+        title_block.setSpacing(2)
         title = QLabel("麦克风同声传译")
         title.setObjectName("panelTitle")
-        title_row.addWidget(title, 1)
+        title_block.addWidget(title)
+        desc = QLabel("监听麦克风并输出实时翻译文字")
+        desc.setObjectName("panelDesc")
+        title_block.addWidget(desc)
+        title_row.addLayout(title_block, 1)
+
+        self._state_chip = QLabel("未启动")
+        self._state_chip.setObjectName("statusChipWarn")
+        title_row.addWidget(self._state_chip)
+
         self._voice_btn = QPushButton("音色")
         self._voice_btn.setObjectName("ghost")
         self._voice_btn.setFixedWidth(72)
@@ -139,20 +154,51 @@ class MicTranslatePanel(QFrame):
         self._source_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._source_edit)
 
-        # Translation text (main stage)
+        # Translation text + empty overlay
+        stage_container = QWidget()
+        stage_stack = QStackedLayout(stage_container)
+        stage_stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        stage_stack.setContentsMargins(0, 0, 0, 0)
+
         self._translation_edit = QTextEdit()
         self._translation_edit.setObjectName("stageLarge")
         self._translation_edit.setReadOnly(True)
-        self._translation_edit.setPlaceholderText("翻译文字将在此显示...")
-        layout.addWidget(self._translation_edit, 1)
+        stage_stack.addWidget(self._translation_edit)
+
+        self._empty_overlay = QWidget()
+        self._empty_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._empty_overlay.setStyleSheet("background: transparent;")
+        empty_layout = QVBoxLayout(self._empty_overlay)
+        empty_layout.setContentsMargins(20, 22, 20, 22)
+        empty_layout.setSpacing(8)
+        self._empty_title = QLabel("等待开始麦克风翻译")
+        self._empty_title.setObjectName("emptyTitle")
+        self._empty_copy = QLabel(
+            "选择麦克风设备并点击下方按钮开始。翻译文字会显示在这里，也可同步到悬浮字幕。"
+        )
+        self._empty_copy.setObjectName("emptyCopy")
+        self._empty_copy.setWordWrap(True)
+        empty_layout.addWidget(self._empty_title)
+        empty_layout.addWidget(self._empty_copy)
+        empty_layout.addStretch()
+        stage_stack.addWidget(self._empty_overlay)
+
+        layout.addWidget(stage_container, 1)
 
         # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self._toggle_btn = QPushButton("▶ 开始翻译")
+        self._toggle_btn = QPushButton("开始翻译")
+        self._toggle_btn.setIcon(resource_icon("play"))
+        self._toggle_btn.setIconSize(QSize(14, 14))
         self._toggle_btn.clicked.connect(self._on_toggle)
         btn_row.addWidget(self._toggle_btn)
+
+        self._overlay_btn = QPushButton("显示悬浮字幕")
+        self._overlay_btn.setObjectName("secondary")
+        self._overlay_btn.clicked.connect(self.sig_overlay_toggle.emit)
+        btn_row.addWidget(self._overlay_btn)
 
         layout.addLayout(btn_row)
 
@@ -253,12 +299,21 @@ class MicTranslatePanel(QFrame):
     def set_running(self, running: bool) -> None:
         self._is_running = running
         if running:
-            self._toggle_btn.setText("◼ 停止翻译")
+            self._toggle_btn.setText("停止翻译")
+            self._toggle_btn.setIcon(resource_icon("stop"))
             self._toggle_btn.setObjectName("danger")
+            self._state_chip.setText("正在监听")
+            self._state_chip.setObjectName("statusChip")
+            self._empty_overlay.setVisible(False)
         else:
-            self._toggle_btn.setText("▶ 开始翻译")
+            self._toggle_btn.setText("开始翻译")
+            self._toggle_btn.setIcon(resource_icon("play"))
             self._toggle_btn.setObjectName("")
+            self._state_chip.setText("未启动")
+            self._state_chip.setObjectName("statusChipWarn")
+            self._empty_overlay.setVisible(True)
         self._toggle_btn.style().polish(self._toggle_btn)
+        self._state_chip.style().polish(self._state_chip)
         self._mic_combo.setEnabled(not running)
         self._engine_combo.setEnabled(not running)
         self._src_lang_combo.setEnabled(not running)

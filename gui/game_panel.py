@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal, Slot
+from PySide6.QtCore import Qt, QSize, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QStackedLayout,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
+from gui.icons import resource_icon
 from gui.subtitle_buffer import SubtitleBuffer
 
 # All S2T supported foreign languages (source OR target)
@@ -70,9 +73,19 @@ class GameSubtitlePanel(QFrame):
         # Title row
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
-        self._title_label = QLabel("翻译字幕")
+        title_block = QVBoxLayout()
+        title_block.setSpacing(2)
+        self._title_label = QLabel("游戏字幕")
         self._title_label.setObjectName("panelTitle")
-        title_row.addWidget(self._title_label, 1)
+        title_block.addWidget(self._title_label)
+        self._desc_label = QLabel("捕获游戏声音并显示翻译字幕")
+        self._desc_label.setObjectName("panelDesc")
+        title_block.addWidget(self._desc_label)
+        title_row.addLayout(title_block, 1)
+
+        self._state_chip = QLabel("未启动")
+        self._state_chip.setObjectName("statusChipWarn")
+        title_row.addWidget(self._state_chip)
         layout.addLayout(title_row)
 
         self._route_label = QLabel()
@@ -121,20 +134,51 @@ class GameSubtitlePanel(QFrame):
         self._lang_hint.setVisible(False)
         layout.addWidget(self._lang_hint)
 
-        # Subtitle stage
+        # Stage (subtitle area + empty overlay)
+        stage_container = QWidget()
+        stage_stack = QStackedLayout(stage_container)
+        stage_stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        stage_stack.setContentsMargins(0, 0, 0, 0)
+
         self._subtitle_edit = QTextEdit()
         self._subtitle_edit.setObjectName("stageLarge")
         self._subtitle_edit.setReadOnly(True)
-        self._subtitle_edit.setPlaceholderText("游戏语音翻译字幕将在此显示...")
-        layout.addWidget(self._subtitle_edit, 1)
+        stage_stack.addWidget(self._subtitle_edit)
+
+        self._empty_overlay = QWidget()
+        self._empty_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self._empty_overlay.setStyleSheet("background: transparent;")
+        empty_layout = QVBoxLayout(self._empty_overlay)
+        empty_layout.setContentsMargins(20, 22, 20, 22)
+        empty_layout.setSpacing(8)
+        self._empty_title = QLabel("等待开始游戏字幕")
+        self._empty_title.setObjectName("emptyTitle")
+        self._empty_copy = QLabel(
+            "确认游戏音频输出到 VB-Cable 后，点击下方按钮开始。字幕会显示在这里，也可以投到悬浮窗口。"
+        )
+        self._empty_copy.setObjectName("emptyCopy")
+        self._empty_copy.setWordWrap(True)
+        empty_layout.addWidget(self._empty_title)
+        empty_layout.addWidget(self._empty_copy)
+        empty_layout.addStretch()
+        stage_stack.addWidget(self._empty_overlay)
+
+        layout.addWidget(stage_container, 1)
 
         # Buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self._toggle_btn = QPushButton("▶ 开始字幕")
+        self._toggle_btn = QPushButton("开始游戏字幕")
+        self._toggle_btn.setIcon(resource_icon("play"))
+        self._toggle_btn.setIconSize(QSize(14, 14))
         self._toggle_btn.clicked.connect(self._on_toggle)
         btn_row.addWidget(self._toggle_btn)
+
+        self._overlay_btn = QPushButton("显示悬浮字幕")
+        self._overlay_btn.setObjectName("secondary")
+        self._overlay_btn.clicked.connect(self.sig_overlay_toggle.emit)
+        btn_row.addWidget(self._overlay_btn)
 
         layout.addLayout(btn_row)
 
@@ -193,15 +237,25 @@ class GameSubtitlePanel(QFrame):
         if not running:
             self._source_buffer.reset()
             self._translation_buffer.reset()
-            self._toggle_btn.setText("▶ 开始字幕")
+            self._toggle_btn.setText("开始游戏字幕")
+            self._toggle_btn.setIcon(resource_icon("play"))
             self._toggle_btn.setObjectName("")
             self._toggle_btn.style().polish(self._toggle_btn)
+            self._state_chip.setText("未启动")
+            self._state_chip.setObjectName("statusChipWarn")
+            self._state_chip.style().polish(self._state_chip)
+            self._empty_overlay.setVisible(True)
             self._on_lang_changed()
         else:
-            self._toggle_btn.setText("◼ 停止字幕")
+            self._toggle_btn.setText("停止游戏字幕")
+            self._toggle_btn.setIcon(resource_icon("stop"))
             self._toggle_btn.setObjectName("danger")
             self._toggle_btn.style().polish(self._toggle_btn)
             self._toggle_btn.setEnabled(True)
+            self._state_chip.setText("运行中")
+            self._state_chip.setObjectName("statusChip")
+            self._state_chip.style().polish(self._state_chip)
+            self._empty_overlay.setVisible(False)
 
     @Slot(str, str)
     def append_subtitle_token(self, kind: str, text: str) -> None:

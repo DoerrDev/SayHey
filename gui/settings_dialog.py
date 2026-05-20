@@ -205,8 +205,13 @@ class SettingsDialog(QDialog):
 
     def _build_overlay_tab(self) -> QWidget:
         w = self._tab_widget()
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 20, 20, 20)
+        outer = QHBoxLayout(w)
+        outer.setContentsMargins(20, 20, 20, 20)
+        outer.setSpacing(18)
+
+        form_container = QWidget()
+        form = QFormLayout(form_container)
+        form.setContentsMargins(0, 0, 0, 0)
         form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
@@ -255,7 +260,48 @@ class SettingsDialog(QDialog):
         self._click_through.setChecked(True)
         form.addRow("", self._click_through)
 
+        outer.addWidget(form_container, 1)
+
+        # Preview pane
+        preview = QFrame()
+        preview.setObjectName("previewBox")
+        preview.setMinimumWidth(280)
+        pv = QVBoxLayout(preview)
+        pv.setContentsMargins(16, 16, 16, 16)
+        pv.setSpacing(10)
+        plabel = QLabel("实时预览")
+        plabel.setObjectName("previewLabel")
+        pv.addWidget(plabel)
+        pv.addStretch()
+        self._overlay_sample = QLabel("我们准备好了。现在开始行动。")
+        self._overlay_sample.setObjectName("overlaySample")
+        self._overlay_sample.setWordWrap(True)
+        self._overlay_sample.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        pv.addWidget(self._overlay_sample)
+        outer.addWidget(preview)
+
+        # Wire live updates
+        self._overlay_font_size.valueChanged.connect(self._refresh_overlay_preview)
+        self._overlay_opacity.valueChanged.connect(self._refresh_overlay_preview)
+        self._overlay_width.valueChanged.connect(self._refresh_overlay_preview)
+        self._refresh_overlay_preview()
+
         return w
+
+    def _refresh_overlay_preview(self) -> None:
+        if not hasattr(self, "_overlay_sample"):
+            return
+        size = self._overlay_font_size.value()
+        opacity = self._overlay_opacity.value() / 100.0
+        color = getattr(self, "_color_value", "#14f2ef")
+        bg_alpha = max(0.1, min(1.0, opacity))
+        self._overlay_sample.setStyleSheet(
+            f"background: rgba(0,0,0,{bg_alpha});"
+            f"border:1px solid rgba(255,255,255,0.10);border-radius:12px;"
+            f"color:{color};font-size:{size}px;font-weight:900;padding:12px 14px;"
+        )
+        w = self._overlay_width.value()
+        self._overlay_sample.setMaximumWidth(min(max(w // 2, 200), 520))
 
     def _build_usage_tab(self) -> QWidget:
         w = self._tab_widget()
@@ -369,6 +415,8 @@ class SettingsDialog(QDialog):
         self._color_preview.setStyleSheet(
             f"background-color: {self._color_value}; border: 1px solid rgba(163,207,255,0.3); border-radius: 6px;"
         )
+        if hasattr(self, "_overlay_sample"):
+            self._refresh_overlay_preview()
 
     def _populate(self, s: AppSettings) -> None:
         self._volc_api_key.setText(s.volc_api_key)

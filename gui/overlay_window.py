@@ -60,7 +60,16 @@ class SubtitleOverlay(QWidget):
         self._apply_label_style()
 
     def _apply_label_style(self) -> None:
-        font = QFont("Segoe UI Variable", self._font_size)
+        font = QFont()
+        font.setFamilies([
+            "Segoe UI Variable",
+            "Microsoft YaHei UI",
+            "Microsoft YaHei",
+            "Noto Sans CJK SC",
+            "Segoe UI",
+            "Arial",
+        ])
+        font.setPointSize(self._font_size)
         font.setBold(True)
         self._label.setFont(font)
         self._label.setStyleSheet(

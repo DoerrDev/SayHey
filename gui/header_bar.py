@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QFrame,
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.version import __version__
+from gui.icons import resource_icon
 
 
 _APP_ICON_PATH = Path(__file__).resolve().parent.parent / "resource" / "app-icon.png"
@@ -76,7 +77,22 @@ class HeaderBar(QWidget):
         title_block.addWidget(subtitle)
         layout.addLayout(title_block)
 
-        # Usage cost chip — anchored left, next to title banner
+        # Status card (device readiness summary)
+        self._status_card = QFrame()
+        self._status_card.setObjectName("statusCard")
+        self._status_card.setProperty("kind", "normal")
+        sc_layout = QVBoxLayout(self._status_card)
+        sc_layout.setContentsMargins(12, 6, 12, 6)
+        sc_layout.setSpacing(1)
+        self._status_card_title = QLabel("设备检测中…")
+        self._status_card_title.setObjectName("statusCardTitle")
+        self._status_card_desc = QLabel("正在检测 VB-Cable 与麦克风")
+        self._status_card_desc.setObjectName("statusCardDesc")
+        sc_layout.addWidget(self._status_card_title)
+        sc_layout.addWidget(self._status_card_desc)
+        layout.addWidget(self._status_card)
+
+        # Usage cost chip
         self._usage_chip = QPushButton("¥0.0000 · 累计 ¥0.00")
         self._usage_chip.setObjectName("statusChip")
         self._usage_chip.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -88,7 +104,7 @@ class HeaderBar(QWidget):
 
         layout.addStretch()
 
-        # Status chip (hidden when idle)
+        # Transient status chip (runtime messages)
         self._status_label = QLabel("")
         self._status_label.setObjectName("statusChip")
         self._status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -122,7 +138,8 @@ class HeaderBar(QWidget):
         layout.addWidget(self._feedback_btn)
 
         settings_btn = QToolButton()
-        settings_btn.setText("⚙")
+        settings_btn.setIcon(resource_icon("gear"))
+        settings_btn.setIconSize(QSize(18, 18))
         settings_btn.setToolTip("设置")
         settings_btn.clicked.connect(self.sig_open_settings.emit)
         layout.addWidget(settings_btn)
@@ -140,6 +157,15 @@ class HeaderBar(QWidget):
         self._version_btn.setProperty("hasUpdate", False)
         self._version_btn.clicked.connect(self._on_version_clicked)
         layout.addWidget(self._version_btn)
+
+    def set_status_card(self, title: str, desc: str, kind: str = "normal") -> None:
+        """kind: 'normal' | 'warn' | 'error'"""
+        self._status_card_title.setText(title)
+        self._status_card_desc.setText(desc)
+        self._status_card.setProperty("kind", kind)
+        s = self._status_card.style()
+        s.unpolish(self._status_card)
+        s.polish(self._status_card)
 
     def set_feedback_unread(self, count: int) -> None:
         if count > 0:
