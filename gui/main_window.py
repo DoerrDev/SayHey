@@ -74,10 +74,9 @@ class MainWindow(QMainWindow):
         # Start message poller (server → client push via polling)
         from core.message_poller import MessagePoller
         api_base = store.get().volc_trial_api_base
-        self._msg_poller = MessagePoller(api_base, interval_sec=30, parent=self)
-        self._msg_poller.sig_message.connect(self._on_admin_message)
+        self._msg_poller = MessagePoller(api_base, interval_sec=10, parent=self)
+        self._msg_poller.sig_unread_count.connect(self._on_unread_count)
         self._msg_poller.start()
-        self._last_feedback_name = ""
 
     def _on_update_check(self, info) -> None:
         if info and info.has_update:
@@ -362,16 +361,17 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_feedback(self) -> None:
-        api_base = self._store.get().volc_trial_api_base
-        dlg = FeedbackDialog(api_base, default_name=self._last_feedback_name, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self._last_feedback_name = dlg._name_input.text().strip()
-            self._log_panel.append("需求已提交，等待开发者反馈")
+        dlg = FeedbackDialog(self._store, parent=self)
+        dlg.exec()
+        # After closing, dialog has acked unread messages → refresh badge
+        if getattr(self, "_msg_poller", None):
+            self._msg_poller.trigger_now()
 
-    @Slot(int, str, str)
-    def _on_admin_message(self, mid: int, content: str, created_at: str) -> None:
-        self._log_panel.append(f"📩 开发者消息: {content}")
-        QMessageBox.information(self, "来自开发者的消息", content)
+    @Slot(int)
+    def _on_unread_count(self, n: int) -> None:
+        self._header.set_feedback_unread(n)
+        if n > 0:
+            self._log_panel.append(f"📩 有 {n} 条来自开发者的新消息，点击「提需求」查看")
 
     @Slot()
     def _toggle_overlay(self) -> None:

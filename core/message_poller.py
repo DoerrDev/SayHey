@@ -10,55 +10,40 @@ from core.machine_id import get_machine_id_hash
 
 
 class MessagePoller(QThread):
-    sig_message = Signal(int, str, str)  # id, content, created_at
+    sig_unread_count = Signal(int)
 
-    def __init__(self, api_base: str, interval_sec: int = 30, parent=None) -> None:
+    def __init__(self, api_base: str, interval_sec: int = 10, parent=None) -> None:
         super().__init__(parent)
         self._api_base = api_base.rstrip("/")
-        self._interval = max(10, int(interval_sec))
+        self._interval = max(5, int(interval_sec))
         self._stop = False
         self._machine_id = get_machine_id_hash()
+        self._last_count = -1
 
     def request_stop(self) -> None:
         self._stop = True
 
-    def _fetch(self) -> list[dict]:
+    def trigger_now(self) -> None:
+        self._last_count = -1  # force re-emit even if value unchanged
+
+    def _fetch_count(self) -> int:
         req = urllib.request.Request(
-            f"{self._api_base}/api/messages",
+            f"{self._api_base}/api/messages/unread-count",
             headers={"X-Machine-Id": self._machine_id},
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-
-    def _ack(self, ids: list[int]) -> None:
-        body = json.dumps({"ids": ids}).encode("utf-8")
-        req = urllib.request.Request(
-            f"{self._api_base}/api/messages/ack",
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "X-Machine-Id": self._machine_id,
-            },
-            method="POST",
-        )
-        try:
-            urllib.request.urlopen(req, timeout=10).read()
-        except Exception:
-            pass
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        return int(data.get("count", 0))
 
     def run(self) -> None:
         while not self._stop:
             try:
-                rows = self._fetch()
-                ids: list[int] = []
-                for r in rows:
-                    self.sig_message.emit(int(r["id"]), str(r.get("content", "")), str(r.get("created_at", "")))
-                    ids.append(int(r["id"]))
-                if ids:
-                    self._ack(ids)
+                n = self._fetch_count()
+                if n != self._last_count:
+                    self._last_count = n
+                    self.sig_unread_count.emit(n)
             except Exception:
                 pass
-            # Sleep in small slices so stop is responsive
             slept = 0
             while slept < self._interval and not self._stop:
                 time.sleep(1)

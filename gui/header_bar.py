@@ -114,12 +114,12 @@ class HeaderBar(QWidget):
         self._adjust_btn.toggled.connect(self.sig_adjust_overlay.emit)
         layout.addWidget(self._adjust_btn)
 
-        feedback_btn = QPushButton("提需求")
-        feedback_btn.setObjectName("secondary")
-        feedback_btn.setFixedWidth(80)
-        feedback_btn.setToolTip("快速提交需求/反馈，将同步到 GitHub Issue")
-        feedback_btn.clicked.connect(self.sig_open_feedback.emit)
-        layout.addWidget(feedback_btn)
+        self._feedback_btn = QPushButton("提需求")
+        self._feedback_btn.setObjectName("secondary")
+        self._feedback_btn.setFixedWidth(80)
+        self._feedback_btn.setToolTip("快速提交需求/反馈，将同步到 GitHub Issue")
+        self._feedback_btn.clicked.connect(self.sig_open_feedback.emit)
+        layout.addWidget(self._feedback_btn)
 
         settings_btn = QToolButton()
         settings_btn.setText("⚙")
@@ -140,6 +140,19 @@ class HeaderBar(QWidget):
         self._version_btn.setProperty("hasUpdate", False)
         self._version_btn.clicked.connect(self._on_version_clicked)
         layout.addWidget(self._version_btn)
+
+    def set_feedback_unread(self, count: int) -> None:
+        if count > 0:
+            self._feedback_btn.setText(f"提需求 ●")
+            self._feedback_btn.setToolTip(f"有 {count} 条来自开发者的新消息")
+            self._feedback_btn.setStyleSheet(
+                "QPushButton{color:#fff;background:#d44;border:0;border-radius:6px;}"
+                "QPushButton:hover{background:#e55;}"
+            )
+        else:
+            self._feedback_btn.setText("提需求")
+            self._feedback_btn.setToolTip("快速提交需求/反馈，将同步到 GitHub Issue")
+            self._feedback_btn.setStyleSheet("")
 
     def set_update_available(self, info) -> None:
         self._pending_update = info
