@@ -47,6 +47,7 @@ class AppSettings:
     volc_trial_proxy_ws_url: str = "wss://huoshanproxy.doerr.work/api/v4/ast/v2/translate"
     volc_trial_api_base: str = "https://huoshanproxy.doerr.work"
     feedback_nickname: str = ""
+    cable_test_state: str = "idle"
 
 
 class SettingsStore:

@@ -3,7 +3,6 @@ from __future__ import annotations
 from gui.icons import icons_dir_qss
 
 STYLESHEET = """
-/* === Global === */
 QWidget {
     background-color: #0a1016;
     color: #eef7ff;
@@ -16,48 +15,124 @@ QMainWindow {
 QDialog {
     background-color: #0f1923;
 }
+QDialog#feedbackDialog {
+    background: #101923;
+}
 QLabel {
     background: transparent;
 }
+QLabel#headerTitle {
+    color: #eef7ff;
+    font-size: 18px;
+    font-weight: 900;
+}
+QLabel#headerSubtitle {
+    color: #82a4b9;
+    font-size: 12px;
+}
+QLabel#logoFallback {
+    color: #42dd92;
+    font-size: 24px;
+    font-weight: 900;
+    border-radius: 12px;
+    background: rgba(66,221,146,0.10);
+    border: 1px solid rgba(66,221,146,0.26);
+}
 
-/* === Card panels === */
 QFrame#card {
     background-color: rgba(17, 27, 37, 0.95);
     border: 1px solid rgba(163, 207, 255, 0.12);
     border-radius: 20px;
 }
-
-/* === Status card (header) === */
-QFrame#statusCard {
-    background: rgba(66, 221, 146, 0.08);
-    border: 1px solid rgba(66, 221, 146, 0.28);
-    border-radius: 12px;
-}
-QFrame#statusCard[kind="warn"] {
-    background: rgba(255, 209, 102, 0.08);
-    border-color: rgba(255, 209, 102, 0.35);
-}
-QFrame#statusCard[kind="error"] {
-    background: rgba(255, 80, 80, 0.08);
-    border-color: rgba(255, 80, 80, 0.32);
-}
-QLabel#statusCardTitle {
-    color: #ccffe4;
-    font-size: 13px;
+QLabel#feedbackDialogTitle {
+    color: #f3fbff;
+    font-size: 26px;
     font-weight: 900;
 }
-QFrame#statusCard[kind="warn"] QLabel#statusCardTitle {
-    color: #ffe6a5;
+QLabel#feedbackDialogTip {
+    color: #88a7bc;
+    font-size: 13px;
 }
-QFrame#statusCard[kind="error"] QLabel#statusCardTitle {
-    color: #ffb3b3;
-}
-QLabel#statusCardDesc {
-    color: #89a7bc;
+QLabel#feedbackStatusBadge {
+    color: #b9d7ea;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(163, 207, 255, 0.12);
+    border-radius: 999px;
+    padding: 6px 12px;
     font-size: 12px;
+    font-weight: 700;
+}
+QLabel#feedbackFieldLabel, QLabel#feedbackPanelTitle {
+    color: #d8ebf8;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+QLineEdit#feedbackNameInput {
+    min-height: 24px;
+    border-radius: 12px;
+}
+QFrame#feedbackPanel {
+    background: rgba(14, 23, 32, 0.96);
+    border: 1px solid rgba(163, 207, 255, 0.12);
+    border-radius: 18px;
+}
+QScrollArea#feedbackScrollArea {
+    background: transparent;
+    border: none;
+}
+QWidget#feedbackChatContent {
+    background: rgba(8, 13, 19, 0.94);
+    border-top: 1px solid rgba(163, 207, 255, 0.08);
+}
+QFrame#feedbackBubbleWrap {
+    background: transparent;
+    border: none;
+}
+QLabel#feedbackBubbleMeta {
+    color: #7d9ab0;
+    font-size: 11px;
+}
+QFrame#feedbackBubble {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(163, 207, 255, 0.14);
+    border-radius: 16px 16px 16px 6px;
+    max-width: 440px;
+}
+QFrame#feedbackBubble[incoming="false"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                stop:0 rgba(35, 73, 116, 0.98), stop:1 rgba(28, 53, 84, 0.98));
+    border: 1px solid rgba(118, 169, 255, 0.22);
+    border-radius: 16px 16px 6px 16px;
+}
+QLabel#feedbackBubbleText {
+    color: #eef7ff;
+    font-size: 13px;
+    line-height: 1.55;
+}
+QLabel#feedbackEmptyState {
+    color: #7f9bb1;
+    font-size: 14px;
+    padding: 36px 16px;
+}
+QLabel#feedbackErrorState {
+    color: #ffb3b3;
+    font-size: 13px;
+    padding: 24px 16px;
+}
+QTextEdit#feedbackInput {
+    background: rgba(7, 12, 18, 0.96);
+    border: 1px solid rgba(163, 207, 255, 0.14);
+    border-radius: 16px;
+    color: #eef7ff;
+    padding: 12px 14px;
+    font-size: 13px;
+    selection-background-color: rgba(66, 221, 146, 0.22);
+}
+QTextEdit#feedbackInput:focus {
+    border-color: rgba(66, 221, 146, 0.36);
 }
 
-/* === Primary button === */
 QPushButton {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
                 stop:0 #42dd92, stop:1 #93f5c4);
@@ -83,7 +158,6 @@ QPushButton:disabled {
     color: rgba(6, 16, 23, 0.45);
 }
 
-/* === Secondary button (objectName="secondary") === */
 QPushButton#secondary {
     background: rgba(255, 255, 255, 0.07);
     color: #cce4f7;
@@ -100,7 +174,6 @@ QPushButton#secondary:disabled {
     border-color: rgba(163, 207, 255, 0.06);
 }
 
-/* === Danger/stop button === */
 QPushButton#danger {
     background: rgba(255, 80, 80, 0.12);
     color: #ffb3b3;
@@ -116,7 +189,6 @@ QPushButton#danger:disabled {
     border-color: rgba(255, 80, 80, 0.10);
 }
 
-/* === Ghost button === */
 QPushButton#ghost {
     background: transparent;
     color: #9ab8d0;
@@ -127,37 +199,55 @@ QPushButton#ghost:hover {
     background: rgba(255, 255, 255, 0.06);
     color: #cce4f7;
 }
-
-/* === Status chip (QLabel#statusChip / #statusChipWarn / #statusChipError) === */
-QLabel#statusChip {
-    background: rgba(66, 221, 146, 0.10);
-    color: #b0ffd6;
-    border: 1px solid rgba(66, 221, 146, 0.28);
-    border-radius: 999px;
-    padding: 4px 14px;
+QPushButton#versionChip {
+    background: rgba(255, 255, 255, 0.05);
+    color: #b9d7ea;
+    border: 1px solid rgba(163, 207, 255, 0.16);
+    border-radius: 10px;
+    padding: 7px 12px;
     font-size: 12px;
     font-weight: 800;
 }
-QLabel#statusChipWarn {
-    background: rgba(255, 209, 102, 0.10);
+QPushButton#versionChip[hasUpdate="true"] {
+    background: rgba(255, 116, 116, 0.12);
+    color: #ffd7d7;
+    border-color: rgba(255, 116, 116, 0.30);
+}
+
+QFrame#panelStatePill {
+    background: transparent;
+    border: none;
+}
+QFrame#panelStatePill[kind="normal"] {
+}
+QFrame#panelStatePill[kind="error"] {
+}
+QLabel#panelStatePillDot {
+    background: #ffd166;
+    border-radius: 4px;
+    min-width: 8px;
+    min-height: 8px;
+    max-width: 8px;
+    max-height: 8px;
+}
+QLabel#panelStatePillDot[kind="normal"] {
+    background: #42dd92;
+}
+QLabel#panelStatePillDot[kind="error"] {
+    background: #ff7474;
+}
+QLabel#panelStatePillText {
     color: #ffe6a5;
-    border: 1px solid rgba(255, 209, 102, 0.35);
-    border-radius: 999px;
-    padding: 4px 14px;
     font-size: 12px;
     font-weight: 800;
 }
-QLabel#statusChipError {
-    background: rgba(255, 80, 80, 0.10);
-    color: #ffb3b3;
-    border: 1px solid rgba(255, 80, 80, 0.30);
-    border-radius: 999px;
-    padding: 4px 14px;
-    font-size: 12px;
-    font-weight: 800;
+QFrame#panelStatePill[kind="normal"] QLabel#panelStatePillText {
+    color: #bfffdc;
+}
+QFrame#panelStatePill[kind="error"] QLabel#panelStatePillText {
+    color: #ffd1d1;
 }
 
-/* === Subtitle text areas === */
 QTextEdit#stage {
     background-color: rgba(8, 14, 20, 0.90);
     border: 1px solid rgba(255, 255, 255, 0.07);
@@ -179,7 +269,6 @@ QTextEdit#stageLarge {
     selection-background-color: rgba(66, 221, 146, 0.28);
 }
 
-/* === Empty state === */
 QLabel#emptyTitle {
     color: #d5e5ef;
     font-size: 22px;
@@ -189,18 +278,27 @@ QLabel#emptyCopy {
     color: #89a7bc;
     font-size: 13px;
 }
+QLabel#routeHintWarn {
+    color: #ffd166;
+    font-size: 12px;
+    font-weight: 700;
+}
+QLabel#sourceLine {
+    color: #86a7bd;
+    font-size: 14px;
+    font-weight: 700;
+}
 
-/* === Panel description === */
 QLabel#panelDesc {
     color: #89a7bc;
     font-size: 12px;
 }
 
-/* === Preview box (settings dialog) === */
 QFrame#previewBox {
     border-radius: 16px;
     border: 1px solid rgba(66, 221, 146, 0.24);
-    background: #081018;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 rgba(12, 26, 36, 0.94), stop:1 rgba(8, 16, 24, 0.98));
 }
 QLabel#overlaySample {
     background: rgba(0, 0, 0, 0.72);
@@ -217,7 +315,6 @@ QLabel#previewLabel {
     font-weight: 800;
 }
 
-/* === Input / ComboBox === */
 QLineEdit {
     background: rgba(5, 10, 15, 0.80);
     color: #eef7ff;
@@ -259,8 +356,26 @@ QComboBox QAbstractItemView {
     outline: none;
     padding: 4px;
 }
+QComboBox QAbstractItemView::item {
+    background: #111b25;
+    color: #eef7ff;
+    min-height: 26px;
+    padding: 3px 8px;
+}
+QComboBox QAbstractItemView::item:selected {
+    background: rgba(66, 221, 146, 0.22);
+    color: #eef7ff;
+}
+QComboBox QListView {
+    background: #111b25;
+    border: 1px solid rgba(163, 207, 255, 0.18);
+    outline: none;
+}
+QComboBox QListView::viewport {
+    background: #111b25;
+    border-radius: 10px;
+}
 
-/* === Log panel === */
 QPlainTextEdit#log {
     background: rgba(5, 9, 13, 0.85);
     color: #7a9db5;
@@ -271,7 +386,6 @@ QPlainTextEdit#log {
     padding: 12px;
 }
 
-/* === Settings tabs === */
 QTabBar::tab {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(163, 207, 255, 0.14);
@@ -298,7 +412,6 @@ QTabWidget::pane {
     top: -1px;
 }
 
-/* === Spinbox, Slider === */
 QSpinBox, QDoubleSpinBox {
     background: rgba(5, 10, 15, 0.80);
     color: #eef7ff;
@@ -357,7 +470,6 @@ QSlider::sub-page:horizontal {
     border-radius: 3px;
 }
 
-/* === CheckBox === */
 QCheckBox {
     color: #cce4f7;
     spacing: 8px;
@@ -375,7 +487,6 @@ QCheckBox::indicator:checked {
     border-color: #42dd92;
 }
 
-/* === Scrollbar === */
 QScrollBar:vertical {
     background: transparent;
     width: 6px;
@@ -386,8 +497,13 @@ QScrollBar::handle:vertical {
     border-radius: 3px;
     min-height: 20px;
 }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; border: none; }
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}
 QScrollBar:horizontal {
     background: transparent;
     height: 6px;
@@ -397,14 +513,15 @@ QScrollBar::handle:horizontal {
     border-radius: 3px;
     min-width: 20px;
 }
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; border: none; }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+    border: none;
+}
 
-/* === Separator === */
 QFrame[frameShape="4"], QFrame[frameShape="5"] {
     color: rgba(163, 207, 255, 0.10);
 }
 
-/* === Tool button (gear icon) === */
 QToolButton {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(163, 207, 255, 0.14);
@@ -418,7 +535,6 @@ QToolButton:hover {
     color: #eef7ff;
 }
 
-/* === Section labels === */
 QLabel#sectionTitle {
     color: #b0d4ee;
     font-size: 11px;
@@ -434,30 +550,58 @@ QLabel#routeLabel {
     color: #6a8fa8;
     font-size: 12px;
 }
-
-/* === Dot indicator === */
-QLabel#dotGreen {
-    color: #42dd92;
-    font-size: 18px;
+QLabel#checkTitle {
+    color: #eef7ff;
+    font-size: 13px;
+    font-weight: 800;
 }
-QLabel#dotOrange {
-    color: #ffa042;
-    font-size: 18px;
+QLabel#checkDetail {
+    color: #89a7bc;
+    font-size: 12px;
 }
-QLabel#dotRed {
-    color: #ff5050;
-    font-size: 18px;
+QLabel#checkTitle[state="error"] {
+    color: #ffd1d1;
 }
-QLabel#dotGray {
-    color: rgba(163, 207, 255, 0.25);
-    font-size: 18px;
+QLabel#checkDetail[state="error"] {
+    color: #ffb3b3;
 }
-
+QLabel#checkTitle[state="warn"] {
+    color: #ffe7ad;
+}
+QLabel#checkDetail[state="warn"] {
+    color: #d9bf78;
+}
+QLabel#activityTime {
+    color: #7e9cb2;
+    font-size: 12px;
+    min-width: 38px;
+}
+QLabel#activityText {
+    color: #c7dfef;
+    font-size: 13px;
+}
+QLabel#eventDotNormal {
+    color: #58e6a4;
+    font-size: 14px;
+}
+QLabel#eventDotWarn {
+    color: #ffd166;
+    font-size: 14px;
+}
+QLabel#eventDotError {
+    color: #ff7474;
+    font-size: 14px;
+}
+QLabel#eventDotInfo {
+    color: #76a9ff;
+    font-size: 14px;
+}
 """
 
 
 def apply_theme(app) -> None:
     from PySide6.QtGui import QFont
+
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET.replace("{ICONS_DIR}", icons_dir_qss()))
     font = QFont("Segoe UI Variable", 10)
