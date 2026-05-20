@@ -29,6 +29,10 @@ jobs:
           pip install -r requirements.txt
           pip install "nuitka>=2.4" zstandard
 
+      - name: Stamp version from tag
+        shell: cmd
+        run: python scripts\stamp_version.py %GITHUB_REF_NAME%
+
       - name: Build SayHey main
         shell: cmd
         run: |
