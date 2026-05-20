@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QSizePolicy,
     QSlider,
     QSpinBox,
     QTabWidget,
@@ -25,7 +24,6 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt
 
-from app_core.audio_devices import AudioDevice, DeviceResolver
 from core.settings_store import AppSettings, SettingsStore
 
 
@@ -50,7 +48,6 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(680)
         self.setMinimumHeight(500)
         self._store = store
-        self._resolver = DeviceResolver()
         self._build_ui()
         self._populate(store.get())
 
@@ -69,7 +66,6 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(self._build_volc_tab(), "🌋 火山引擎")
         self._tabs.addTab(self._build_openai_tab(), "✨ OpenAI")
         self._tabs.addTab(self._build_volc_trial_tab(), "🎁 火山引擎试用")
-        self._tabs.addTab(self._build_audio_tab(), "🎧 音频设备")
         self._tabs.addTab(self._build_overlay_tab(), "💬 字幕外观")
         self._tabs.addTab(self._build_usage_tab(), "📊 用量统计")
 
@@ -204,35 +200,6 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(refresh_btn)
         btn_row.addStretch()
         form.addRow("", btn_row)
-
-        return w
-
-    def _build_audio_tab(self) -> QWidget:
-        w = self._tab_widget()
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 20, 20, 20)
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
-        self._mic_combo = QComboBox()
-        self._mic_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._populate_mic_combo()
-        form.addRow("麦克风设备", self._mic_combo)
-
-        self._vb_cable_input_name = QLineEdit()
-        form.addRow("Cable Input 名称", self._vb_cable_input_name)
-
-        self._vb_cable_output_name = QLineEdit()
-        form.addRow("Cable Output 名称", self._vb_cable_output_name)
-
-        self._game_audio_device = QLineEdit()
-        self._game_audio_device.setPlaceholderText("留空自动选择系统默认扬声器")
-        form.addRow("游戏音频设备名称", self._game_audio_device)
-
-        refresh_btn = QPushButton("刷新设备列表")
-        refresh_btn.setObjectName("secondary")
-        refresh_btn.clicked.connect(self._populate_mic_combo)
-        form.addRow("", refresh_btn)
 
         return w
 
@@ -403,22 +370,6 @@ class SettingsDialog(QDialog):
             f"background-color: {self._color_value}; border: 1px solid rgba(163,207,255,0.3); border-radius: 6px;"
         )
 
-    def _populate_mic_combo(self) -> None:
-        self._resolver.refresh()
-        current = self._mic_combo.currentData()
-        self._mic_combo.clear()
-        self._mic_combo.addItem("（自动选择）", None)
-        for device in self._resolver.input_devices():
-            if "cable output" in device.name.lower():
-                continue
-            label = f"#{device.index} | {device.name}"
-            self._mic_combo.addItem(label, device.index)
-        if current is not None:
-            for i in range(self._mic_combo.count()):
-                if self._mic_combo.itemData(i) == current:
-                    self._mic_combo.setCurrentIndex(i)
-                    break
-
     def _populate(self, s: AppSettings) -> None:
         self._volc_api_key.setText(s.volc_api_key)
         self._volc_resource_id.setText(s.volc_resource_id)
@@ -434,16 +385,6 @@ class SettingsDialog(QDialog):
 
         self._openai_api_key.setText(s.openai_api_key)
         self._openai_ws_url.setText(s.openai_ws_url)
-
-        if s.mic_input_index is not None:
-            for i in range(self._mic_combo.count()):
-                if self._mic_combo.itemData(i) == s.mic_input_index:
-                    self._mic_combo.setCurrentIndex(i)
-                    break
-
-        self._vb_cable_input_name.setText(s.vb_cable_input_name)
-        self._vb_cable_output_name.setText(s.vb_cable_output_name)
-        self._game_audio_device.setText(s.game_audio_device_name)
 
         self._overlay_max_lines.setValue(s.overlay_max_lines)
         self._overlay_font_size.setValue(s.overlay_font_size)
@@ -476,10 +417,6 @@ class SettingsDialog(QDialog):
             game_subtitle_target_language=self._game_tgt_lang.currentData() or s.game_subtitle_target_language,
             openai_api_key=self._openai_api_key.text().strip(),
             openai_ws_url=self._openai_ws_url.text().strip() or s.openai_ws_url,
-            mic_input_index=self._mic_combo.currentData(),
-            vb_cable_input_name=self._vb_cable_input_name.text().strip() or s.vb_cable_input_name,
-            vb_cable_output_name=self._vb_cable_output_name.text().strip() or s.vb_cable_output_name,
-            game_audio_device_name=self._game_audio_device.text().strip(),
             overlay_max_lines=self._overlay_max_lines.value(),
             overlay_font_size=self._overlay_font_size.value(),
             overlay_opacity=self._overlay_opacity.value() / 100.0,
