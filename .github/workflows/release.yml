@@ -71,10 +71,17 @@ jobs:
       - name: Package dist
         shell: pwsh
         run: |
-          if (Test-Path dist/sayhey) { Remove-Item -Recurse -Force dist/sayhey }
-          Rename-Item dist/main.dist dist/sayhey
-          Copy-Item tools/updater/build_out/updater.exe dist/sayhey/updater.exe
-          Compress-Archive -Path dist/sayhey/* -DestinationPath dist/sayhey-windows.zip -Force
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path dist\sayhey) { Remove-Item -Recurse -Force dist\sayhey }
+          Move-Item dist\main.dist dist\sayhey
+          Copy-Item tools\updater\build_out\updater.exe dist\sayhey\updater.exe -Force
+          if (Test-Path dist\sayhey-windows.zip) { Remove-Item -Force dist\sayhey-windows.zip }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            (Resolve-Path dist\sayhey).Path,
+            (Join-Path (Resolve-Path dist).Path 'sayhey-windows.zip'),
+            [System.IO.Compression.CompressionLevel]::Optimal, $false)
+          Get-Item dist\sayhey-windows.zip | Select-Object FullName, Length
 
       - name: Create GitHub Release
         id: gh_release
