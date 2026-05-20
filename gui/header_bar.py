@@ -8,11 +8,14 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QToolButton,
     QVBoxLayout,
     QWidget,
 )
+
+from core.version import __version__
 
 
 _APP_ICON_PATH = Path(__file__).resolve().parent.parent / "resource" / "app-icon.png"
@@ -32,6 +35,7 @@ class HeaderBar(QWidget):
         self._total_cost = 0.0
         self._session_tokens = 0
         self._total_tokens = 0
+        self._pending_update = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -114,6 +118,38 @@ class HeaderBar(QWidget):
         settings_btn.setToolTip("设置")
         settings_btn.clicked.connect(self.sig_open_settings.emit)
         layout.addWidget(settings_btn)
+
+        self._version_btn = QPushButton(f"v{__version__}")
+        self._version_btn.setObjectName("versionChip")
+        self._version_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._version_btn.setFlat(True)
+        self._version_btn.setToolTip("当前版本，点击检查更新")
+        self._version_btn.setStyleSheet(
+            "QPushButton#versionChip{padding:2px 10px;border-radius:8px;"
+            "background:#2a2f3a;color:#bbb;font-size:12px;}"
+            "QPushButton#versionChip[hasUpdate=\"true\"]{background:#5a2a2a;color:#fff;}"
+        )
+        self._version_btn.setProperty("hasUpdate", False)
+        self._version_btn.clicked.connect(self._on_version_clicked)
+        layout.addWidget(self._version_btn)
+
+    def set_update_available(self, info) -> None:
+        self._pending_update = info
+        self._version_btn.setText(f"v{__version__} ●")
+        self._version_btn.setToolTip(f"发现新版本 {info.latest_tag}，点击查看")
+        self._version_btn.setProperty("hasUpdate", True)
+        s = self._version_btn.style()
+        s.unpolish(self._version_btn)
+        s.polish(self._version_btn)
+
+    def _on_version_clicked(self) -> None:
+        if self._pending_update and self._pending_update.has_update:
+            from gui.update_dialog import UpdateDialog
+            UpdateDialog(self._pending_update, self).exec()
+        else:
+            QMessageBox.information(
+                self, "版本", f"当前版本 v{__version__}\n暂无可用更新"
+            )
 
     def set_usage_visible(self, visible: bool) -> None:
         self._usage_chip.setVisible(visible)

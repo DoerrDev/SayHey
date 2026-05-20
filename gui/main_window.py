@@ -67,6 +67,13 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._apply_settings(store.get())
 
+        from core.update_checker import start_check
+        self._update_thread = start_check(self._on_update_check)
+
+    def _on_update_check(self, info) -> None:
+        if info and info.has_update:
+            self._header.set_update_available(info)
+
     def _build_layout(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)

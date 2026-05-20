@@ -13,6 +13,7 @@ recordings_forward/
 # Build output
 dist/
 *.build/
+tools/updater/build_out/
 
 # Python
 __pycache__/

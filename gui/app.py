@@ -4,6 +4,8 @@ import sys
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
+from core.version import __version__
+
 
 def create_app() -> QApplication:
     QApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -11,6 +13,6 @@ def create_app() -> QApplication:
     )
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName("SayHey")
-    app.setApplicationVersion("2.0.0")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("SayHey")
     return app

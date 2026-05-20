@@ -46,6 +46,21 @@ if exist "%FINAL_DIST_DIR%" rmdir /s /q "%FINAL_DIST_DIR%"
 if exist "%ZIP_PATH%" del /f /q "%ZIP_PATH%"
 if exist "%RAW_DIST_DIR%" ren "%RAW_DIST_DIR%" "%APP_NAME%"
 
+echo [SayHey] Building updater.exe...
+call "%~dp0..\tools\updater\build_updater.bat"
+if errorlevel 1 (
+    echo [SayHey] Updater build FAILED.
+    pause
+    exit /b 1
+)
+cd /d "%~dp0.."
+copy /Y "%~dp0..\tools\updater\build_out\updater.exe" "%FINAL_DIST_DIR%\updater.exe"
+if errorlevel 1 (
+    echo [SayHey] Copy updater.exe FAILED.
+    pause
+    exit /b 1
+)
+
 echo [SayHey] Packaging into zip...
 powershell -NoProfile -Command "Compress-Archive -Path '%FINAL_DIST_DIR%\*' -DestinationPath '%ZIP_PATH%' -Force"
 
