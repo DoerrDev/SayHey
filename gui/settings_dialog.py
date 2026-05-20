@@ -68,6 +68,7 @@ class SettingsDialog(QDialog):
 
         self._tabs.addTab(self._build_volc_tab(), "🌋 火山引擎")
         self._tabs.addTab(self._build_openai_tab(), "✨ OpenAI")
+        self._tabs.addTab(self._build_volc_trial_tab(), "🎁 火山引擎试用")
         self._tabs.addTab(self._build_audio_tab(), "🎧 音频设备")
         self._tabs.addTab(self._build_overlay_tab(), "💬 字幕外观")
         self._tabs.addTab(self._build_usage_tab(), "📊 用量统计")
@@ -153,6 +154,56 @@ class SettingsDialog(QDialog):
         note.setObjectName("routeLabel")
         note.setWordWrap(True)
         form.addRow("", note)
+
+        return w
+
+    def _build_volc_trial_tab(self) -> QWidget:
+        w = self._tab_widget()
+        form = QFormLayout(w)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        intro = QLabel(
+            "试用代理由作者自费提供，使用作者购买的火山引擎 App Key。\n"
+            "每个用户分配少量额度，超额自动断开。\n"
+            "如果体验良好，请前往「🌋 火山引擎」Tab 填写自己的 App Key 以获得无限额度。"
+        )
+        intro.setObjectName("routeLabel")
+        intro.setWordWrap(True)
+        form.addRow("", intro)
+
+        self._volc_trial_enabled = QCheckBox("使用试用代理（覆盖火山引擎 Key 与 WS URL）")
+        form.addRow("", self._volc_trial_enabled)
+
+        self._volc_trial_api_base = QLineEdit()
+        self._volc_trial_api_base.setPlaceholderText("https://huoshanproxy.doerr.work")
+        form.addRow("服务地址", self._volc_trial_api_base)
+
+        self._volc_trial_proxy_ws_url = QLineEdit()
+        self._volc_trial_proxy_ws_url.setPlaceholderText("wss://huoshanproxy.doerr.work/api/v4/ast/v2/translate")
+        form.addRow("代理 WS URL", self._volc_trial_proxy_ws_url)
+
+        self._volc_trial_token = QLineEdit()
+        self._volc_trial_token.setReadOnly(True)
+        self._volc_trial_token.setPlaceholderText("尚未申请")
+        form.addRow("当前 Token", self._volc_trial_token)
+
+        self._volc_trial_balance = QLabel("余额：未知")
+        self._volc_trial_balance.setStyleSheet("color:#4f8cff;font-weight:600;")
+        form.addRow("额度", self._volc_trial_balance)
+
+        btn_row = QHBoxLayout()
+        apply_btn = QPushButton("🚀 马上使用")
+        apply_btn.setObjectName("secondary")
+        apply_btn.clicked.connect(self._apply_trial_token)
+        btn_row.addWidget(apply_btn)
+        refresh_btn = QPushButton("刷新余额")
+        refresh_btn.setObjectName("secondary")
+        refresh_btn.clicked.connect(self._refresh_trial_balance)
+        btn_row.addWidget(refresh_btn)
+        btn_row.addStretch()
+        form.addRow("", btn_row)
 
         return w
 
@@ -267,6 +318,75 @@ class SettingsDialog(QDialog):
 
         return w
 
+    def _apply_trial_token(self) -> None:
+        import time, json, urllib.request, urllib.error
+        from core.machine_id import get_machine_id_hash
+
+        reply = QMessageBox.question(
+            self,
+            "申请公益试用 Token",
+            "该 Token 是作者自费提供的公益额度，配额有限。\n"
+            "如果使用效果不错，强烈建议自己去火山引擎申请 App Key\n"
+            "（在「🌋 火山引擎」Tab 填写自己的 Key 即可获得无限额度）。\n\n"
+            "是否继续申请？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        api_base = self._volc_trial_api_base.text().strip() or "https://huoshanproxy.doerr.work"
+        machine_id = get_machine_id_hash()
+        body = json.dumps({"machine_id_hash": machine_id, "ts": int(time.time())}).encode("utf-8")
+        req = urllib.request.Request(
+            f"{api_base.rstrip('/')}/api/apply",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            QMessageBox.warning(self, "申请失败", f"无法连接到试用服务：{exc}")
+            return
+
+        token = data.get("token", "")
+        proxy_url = data.get("proxy_ws_url", "") or self._volc_trial_proxy_ws_url.text().strip()
+        quota = float(data.get("quota_cny", 0))
+        used = float(data.get("used_cny", 0))
+        self._volc_trial_token.setText(token)
+        if proxy_url:
+            self._volc_trial_proxy_ws_url.setText(proxy_url)
+        self._volc_trial_enabled.setChecked(True)
+        self._volc_trial_balance.setText(f"剩余 ¥{max(quota-used,0):.4f} / 共 ¥{quota:.2f}")
+        QMessageBox.information(self, "申请成功", "Token 已写入，请记得点击「保存」生效。")
+
+    def _refresh_trial_balance(self) -> None:
+        import json, urllib.request
+        token = self._volc_trial_token.text().strip()
+        api_base = self._volc_trial_api_base.text().strip() or "https://huoshanproxy.doerr.work"
+        if not token:
+            self._volc_trial_balance.setText("余额：未申请")
+            return
+        req = urllib.request.Request(
+            f"{api_base.rstrip('/')}/api/token/info",
+            headers={"X-Api-Key": token},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            self._volc_trial_balance.setText(f"查询失败：{exc}")
+            return
+        quota = float(data.get("quota_cny", 0))
+        used = float(data.get("used_cny", 0))
+        disabled = bool(data.get("is_disabled", False))
+        if disabled:
+            self._volc_trial_balance.setText("Token 已被禁用")
+        else:
+            self._volc_trial_balance.setText(f"剩余 ¥{max(quota-used,0):.4f} / 共 ¥{quota:.2f}")
+
     def _open_volc_key_page(self) -> None:
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
@@ -335,6 +455,15 @@ class SettingsDialog(QDialog):
         self._usage_tracking.setChecked(s.usage_tracking_enabled)
         self._usage_chip_show_token.setChecked(s.usage_chip_show_token)
 
+        self._volc_trial_enabled.setChecked(s.volc_trial_enabled)
+        self._volc_trial_token.setText(s.volc_trial_token)
+        self._volc_trial_proxy_ws_url.setText(s.volc_trial_proxy_ws_url)
+        self._volc_trial_api_base.setText(s.volc_trial_api_base)
+        if s.volc_trial_token:
+            self._refresh_trial_balance()
+        else:
+            self._volc_trial_balance.setText("余额：未申请")
+
     def _collect(self) -> AppSettings:
         s = self._store.get()
         from dataclasses import replace
@@ -359,12 +488,17 @@ class SettingsDialog(QDialog):
             overlay_click_through=self._click_through.isChecked(),
             usage_tracking_enabled=self._usage_tracking.isChecked(),
             usage_chip_show_token=self._usage_chip_show_token.isChecked(),
+            volc_trial_enabled=self._volc_trial_enabled.isChecked(),
+            volc_trial_token=self._volc_trial_token.text().strip(),
+            volc_trial_proxy_ws_url=self._volc_trial_proxy_ws_url.text().strip() or s.volc_trial_proxy_ws_url,
+            volc_trial_api_base=self._volc_trial_api_base.text().strip() or s.volc_trial_api_base,
         )
 
     @Slot()
     def _on_save(self) -> None:
         settings = self._collect()
-        if not settings.volc_api_key and settings.translator_engine == "huoshan":
+        has_trial = settings.volc_trial_enabled and settings.volc_trial_token
+        if not settings.volc_api_key and not has_trial and settings.translator_engine == "huoshan":
             reply = QMessageBox.question(
                 self,
                 "火山引擎 Key 未填写",

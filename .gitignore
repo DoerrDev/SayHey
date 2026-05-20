@@ -28,3 +28,6 @@ __pycache__/
 
 # Audio recordings
 *.wav
+
+# Server subproject (separate repo)
+SayHeyServer/

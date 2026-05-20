@@ -42,6 +42,10 @@ class AppSettings:
     usage_chip_show_token: bool = True
     auto_switch_default_mic: bool = False
     auto_switch_mic_keyword: str = "CABLE Output"
+    volc_trial_enabled: bool = False
+    volc_trial_token: str = ""
+    volc_trial_proxy_ws_url: str = "wss://huoshanproxy.doerr.work/api/v4/ast/v2/translate"
+    volc_trial_api_base: str = "https://huoshanproxy.doerr.work"
 
 
 class SettingsStore:
@@ -119,11 +123,16 @@ class SettingsStore:
         )
 
     def _sync_to_environ(self, s: AppSettings) -> None:
+        use_trial = bool(s.volc_trial_enabled and s.volc_trial_token)
+        effective_api_key = s.volc_trial_token if use_trial else s.volc_api_key
+        effective_ws_url = s.volc_trial_proxy_ws_url if use_trial else s.volc_ws_url
         overrides: dict[str, str] = {
-            "VOLC_APP_KEY": s.volc_api_key,
-            "VOLC_API_KEY": s.volc_api_key,
+            "VOLC_APP_KEY": effective_api_key,
+            "VOLC_API_KEY": effective_api_key,
             "VOLC_RESOURCE_ID": s.volc_resource_id,
-            "VOLC_WS_URL": s.volc_ws_url,
+            "VOLC_WS_URL": effective_ws_url,
+            "VOLC_TRIAL_ENABLED": "1" if use_trial else "",
+            "VOLC_TRIAL_API_BASE": s.volc_trial_api_base,
             "OPENAI_API_KEY": s.openai_api_key,
             "OPENAI_REALTIME_WS_URL": s.openai_ws_url,
             "VB_CABLE_INPUT_NAME": s.vb_cable_input_name,
