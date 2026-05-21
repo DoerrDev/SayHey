@@ -26,7 +26,13 @@ from gui.game_panel import GameSubtitlePanel
 from gui.header_bar import HeaderBar
 from gui.log_panel import RuntimeLogPanel
 from gui.mic_panel import MicTranslatePanel
+from gui.mic_area import MicAreaPanel
+from gui.float_input import FloatingInputWindow
 from gui.overlay_window import SubtitleOverlay
+from core.hotkey import GlobalHotkey
+from app_core.typed_engine import VolcTranslateConfig, VolcTtsConfig
+from app_core.typed_controller import TypedTranslateController, TypedConfig
+from core.bridge import TypedTranslateThread
 from gui.feedback_dialog import FeedbackDialog
 from gui.settings_dialog import SettingsDialog
 from gui.usage_dialog import UsageDialog
@@ -113,8 +119,10 @@ class MainWindow(QMainWindow):
         self._game_panel = GameSubtitlePanel()
         top_splitter.addWidget(self._game_panel)
 
-        self._mic_panel = MicTranslatePanel()
-        top_splitter.addWidget(self._mic_panel)
+        self._mic_area = MicAreaPanel()
+        self._mic_panel = self._mic_area.voice
+        self._typed_panel = self._mic_area.typed
+        top_splitter.addWidget(self._mic_area)
 
         top_splitter.setSizes([480, 600])
         content_layout.addWidget(top_splitter, 1)
@@ -139,6 +147,21 @@ class MainWindow(QMainWindow):
         self._overlay = SubtitleOverlay()
         self._overlay._on_pos_saved = self._on_overlay_pos_saved
 
+        # Floating input window for typed translate
+        self._float_input = FloatingInputWindow()
+        self._float_input.sig_submit.connect(self._on_typed_submit_from_float)
+
+        # Typed translate state
+        self._typed_controller: Optional[TypedTranslateController] = None
+        self._typed_thread: Optional[TypedTranslateThread] = None
+        self._typed_busy = False
+        self._typed_hotkey_binding = False
+
+        # Global hotkey
+        self._hotkey = GlobalHotkey(self._on_hotkey_pressed)
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance().installNativeEventFilter(self._hotkey)
+
     def _connect_signals(self) -> None:
         # Header actions
         self._header.sig_start_all.connect(self._start_all)
@@ -160,6 +183,11 @@ class MainWindow(QMainWindow):
         self._mic_panel.sig_test_cable.connect(self._test_cable)
         self._mic_panel.sig_select_voice.connect(self._open_voice_selector)
 
+        # Typed panel
+        self._typed_panel.sig_translate_requested.connect(self._on_typed_submit)
+        self._typed_panel.sig_settings_changed.connect(self._on_typed_settings_changed)
+        self._typed_panel.sig_rebind_hotkey.connect(self._begin_hotkey_rebind)
+
         # Checklist
         self._checklist.sig_status.connect(self._on_status)
 
@@ -173,6 +201,135 @@ class MainWindow(QMainWindow):
         self.sig_mic_error.connect(self._on_mic_error)
         self.sig_game_stopped.connect(self._on_game_stopped)
         self.sig_game_error.connect(self._on_game_error)
+
+    def _hotkey_display(self, raw: str) -> str:
+        parts = [p.strip() for p in (raw or "").split("+") if p.strip()]
+        return " + ".join(p[:1].upper() + p[1:] if len(p) > 1 else p.upper() for p in parts) or "未绑定"
+
+    def _on_typed_settings_changed(self) -> None:
+        s = self._store.get()
+        self._store.save(replace(
+            s,
+            typed_source_language=self._typed_panel.selected_source(),
+            typed_target_language=self._typed_panel.selected_target(),
+            typed_auto_tts=self._typed_panel.auto_tts(),
+        ))
+        self._refresh_float_chips()
+
+    def _refresh_float_chips(self) -> None:
+        s = self._store.get()
+        route = f"{s.typed_source_language} → {s.typed_target_language}"
+        self._float_input.update_chips(self._hotkey_display(s.typed_hotkey), route, s.typed_auto_tts)
+
+    def _build_typed_controller(self) -> TypedTranslateController:
+        s = self._store.get()
+        cfg = TypedConfig(
+            translate=VolcTranslateConfig(ak=s.volc_translate_ak, sk=s.volc_translate_sk, region=s.volc_translate_region),
+            tts=VolcTtsConfig(
+                app_key=s.volc_tts_app_key or s.volc_api_key,
+                access_key=s.volc_tts_access_key or s.volc_api_key,
+                speaker_id=s.s2s_speaker_id,
+                resource_id=s.volc_tts_resource_id,
+            ),
+            source_language=self._typed_panel.selected_source(),
+            target_language=self._typed_panel.selected_target(),
+            auto_tts=self._typed_panel.auto_tts(),
+            cable_input_name=s.vb_cable_input_name,
+        )
+        if self._typed_controller is None:
+            self._typed_controller = TypedTranslateController(cfg)
+        else:
+            self._typed_controller.cfg = cfg
+        return self._typed_controller
+
+    @Slot(str)
+    def _on_typed_submit(self, text: str) -> None:
+        self._run_typed(text, from_float=False)
+
+    @Slot(str)
+    def _on_typed_submit_from_float(self, text: str) -> None:
+        self._run_typed(text, from_float=True)
+
+    def _run_typed(self, text: str, from_float: bool) -> None:
+        if self._typed_busy:
+            return
+        try:
+            controller = self._build_typed_controller()
+        except Exception as exc:
+            QMessageBox.critical(self, "打字翻译", str(exc))
+            return
+        self._typed_busy = True
+        self._typed_panel.set_busy(True)
+        thread = TypedTranslateThread(controller, text, parent=self)
+        thread.sig_status.connect(self.sig_status)
+        thread.sig_result.connect(self._on_typed_result)
+        thread.sig_done.connect(self._on_typed_done)
+        thread.sig_error.connect(self._on_typed_error)
+        self._typed_thread = thread
+        thread.start()
+
+    @Slot(str, str)
+    def _on_typed_result(self, source: str, translated: str) -> None:
+        self._typed_panel.show_result(source, translated)
+        self._float_input.show_result(source, translated)
+
+    @Slot()
+    def _on_typed_done(self) -> None:
+        self._typed_busy = False
+        self._typed_panel.set_busy(False)
+        self._typed_thread = None
+
+    @Slot(str)
+    def _on_typed_error(self, msg: str) -> None:
+        self._typed_busy = False
+        self._typed_panel.set_busy(False)
+        self._log_panel.append(f"[typed-error] {msg}")
+        QMessageBox.warning(self, "打字翻译失败", msg)
+
+    def _begin_hotkey_rebind(self) -> None:
+        self._typed_hotkey_binding = True
+        self._typed_panel.set_hotkey_label("请按新的组合键…")
+        self._hotkey.unregister()
+        self.activateWindow()
+        self.setFocus()
+
+    def keyPressEvent(self, event) -> None:
+        if self._typed_hotkey_binding:
+            from PySide6.QtCore import Qt as _Qt
+            k = event.key()
+            if k in (_Qt.Key.Key_Control, _Qt.Key.Key_Alt, _Qt.Key.Key_Shift, _Qt.Key.Key_Meta):
+                return
+            mods = []
+            m = event.modifiers()
+            if m & _Qt.KeyboardModifier.ControlModifier: mods.append("ctrl")
+            if m & _Qt.KeyboardModifier.AltModifier: mods.append("alt")
+            if m & _Qt.KeyboardModifier.ShiftModifier: mods.append("shift")
+            key_name = event.text().strip() or ""
+            if not key_name:
+                if _Qt.Key.Key_F1 <= k <= _Qt.Key.Key_F12:
+                    key_name = f"f{k - _Qt.Key.Key_F1 + 1}"
+            if not key_name:
+                self._typed_hotkey_binding = False
+                self._apply_hotkey(self._store.get().typed_hotkey)
+                return
+            combo = "+".join(mods + [key_name.lower()])
+            self._typed_hotkey_binding = False
+            self._store.save(replace(self._store.get(), typed_hotkey=combo))
+            self._apply_hotkey(combo)
+            return
+        super().keyPressEvent(event)
+
+    def _apply_hotkey(self, combo: str) -> None:
+        if self._hotkey.register(combo):
+            self._typed_panel.set_hotkey_label(self._hotkey_display(combo))
+            self._log_panel.append(f"热键已绑定：{combo}")
+        else:
+            self._typed_panel.set_hotkey_label("热键绑定失败")
+            self._log_panel.append(f"热键绑定失败：{combo}")
+        self._refresh_float_chips()
+
+    def _on_hotkey_pressed(self) -> None:
+        self._float_input.show_centered(self.screen())
 
     def _apply_settings(self, s: AppSettings) -> None:
         self._header.set_usage_visible(s.usage_tracking_enabled)
@@ -197,6 +354,11 @@ class MainWindow(QMainWindow):
         self._overlay.set_click_through(s.overlay_click_through)
         if s.overlay_x is not None and s.overlay_y is not None:
             self._overlay.move(s.overlay_x, s.overlay_y)
+        # Typed panel settings
+        self._typed_panel.set_source(s.typed_source_language)
+        self._typed_panel.set_target(s.typed_target_language)
+        self._typed_panel.set_auto_tts(s.typed_auto_tts)
+        self._apply_hotkey(s.typed_hotkey)
 
     @Slot()
     def _start_all(self) -> None:
@@ -436,4 +598,9 @@ class MainWindow(QMainWindow):
             self._msg_poller.request_stop()
             self._msg_poller.wait(2000)
         self._overlay.close()
+        self._float_input.close()
+        self._hotkey.unregister()
+        if self._typed_controller is not None:
+            self._typed_controller.close()
+            self._typed_controller = None
         super().closeEvent(event)

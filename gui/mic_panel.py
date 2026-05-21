@@ -82,11 +82,9 @@ class MicTranslatePanel(QFrame):
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(10)
 
-        # Title
+        # Voice button row (title moved to MicAreaPanel)
         title_row = QHBoxLayout()
-        title = QLabel("麦克风同声传译")
-        title.setObjectName("panelTitle")
-        title_row.addWidget(title, 1)
+        title_row.addStretch(1)
         self._voice_btn = QPushButton("音色")
         self._voice_btn.setObjectName("ghost")
         self._voice_btn.setFixedWidth(72)

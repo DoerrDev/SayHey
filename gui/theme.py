@@ -391,6 +391,84 @@ QLabel#dotGray {
     font-size: 18px;
 }
 
+/* === Typed translate result box === */
+QFrame#resultWrap {
+    background: rgba(8, 14, 20, 0.85);
+    border: 1px solid rgba(163, 207, 255, 0.10);
+    border-radius: 12px;
+}
+QLabel#resultBox {
+    color: #f0faf5;
+    font-size: 14px;
+    font-weight: 700;
+}
+QLabel#hotkeyBox {
+    background: rgba(8, 14, 20, 0.85);
+    border: 1px solid rgba(163, 207, 255, 0.18);
+    border-radius: 10px;
+    padding: 4px 12px;
+    color: #eef7ff;
+    font-weight: 800;
+}
+
+/* === Mic tabs (inner QTabWidget) === */
+QTabWidget#micTabs::pane {
+    border: 1px solid rgba(163, 207, 255, 0.08);
+    border-radius: 14px;
+    background: transparent;
+    top: -1px;
+}
+
+/* === Floating input window === */
+QLabel#floatChip {
+    background: rgba(8, 13, 24, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    color: #c7d5e8;
+    padding: 3px 12px;
+    font-size: 12px;
+    font-weight: 800;
+}
+QWidget#floatResult {
+    background: rgba(7, 12, 22, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+}
+QLabel#floatLabel {
+    color: #9db0c8;
+    font-weight: 800;
+}
+QLabel#floatSource {
+    color: #cfe0f3;
+    font-size: 14px;
+}
+QLabel#floatTarget {
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+}
+QWidget#floatInputBar {
+    background: rgba(8, 13, 24, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+}
+QLineEdit#floatLineEdit {
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    font-size: 15px;
+    padding: 6px 4px;
+}
+QPushButton#floatSendBtn {
+    background: #19c37d;
+    color: #07111f;
+    border-radius: 999px;
+    padding: 8px 18px;
+    font-weight: 900;
+}
+QPushButton#floatSendBtn:hover {
+    background: #2bd690;
+}
 """
 
 
