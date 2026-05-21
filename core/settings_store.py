@@ -52,12 +52,6 @@ class AppSettings:
     typed_target_language: str = "en"
     typed_auto_tts: bool = True
     typed_hotkey: str = "ctrl+alt+t"
-    volc_translate_ak: str = ""
-    volc_translate_sk: str = ""
-    volc_translate_region: str = "cn-north-1"
-    volc_tts_app_key: str = ""
-    volc_tts_access_key: str = ""
-    volc_tts_resource_id: str = "volc.service_type.10029"
 
 
 class SettingsStore:

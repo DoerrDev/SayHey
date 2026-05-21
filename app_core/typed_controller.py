@@ -8,10 +8,10 @@ from typing import Callable, Optional
 from app_core.audio_devices import DeviceResolver
 from app_core.audio_io import AudioOutputSink
 from app_core.typed_engine import (
-    VolcTranslateConfig,
-    VolcTtsConfig,
-    volc_translate_text,
-    volc_tts_stream,
+    DoubaoTranslateConfig,
+    DoubaoTtsConfig,
+    doubao_translate_text,
+    doubao_tts_stream,
 )
 
 
@@ -21,8 +21,8 @@ TextCallback = Callable[[str, str], None]  # source, translated
 
 @dataclass
 class TypedConfig:
-    translate: VolcTranslateConfig
-    tts: VolcTtsConfig
+    translate: DoubaoTranslateConfig
+    tts: DoubaoTtsConfig
     source_language: str
     target_language: str
     auto_tts: bool
@@ -81,7 +81,7 @@ class TypedTranslateController:
         if not text:
             return
         self._emit(f"[typed] 翻译开始：{text[:60]}")
-        translated = volc_translate_text(
+        translated = doubao_translate_text(
             self.cfg.translate, text, self.cfg.source_language, self.cfg.target_language
         )
         self._emit(f"[typed] 翻译完成：{translated[:60]}")
@@ -95,5 +95,5 @@ class TypedTranslateController:
             if self._sink is not None:
                 self._sink.write(chunk)
 
-        asyncio.run(volc_tts_stream(self.cfg.tts, translated, on_pcm, self._emit))
+        asyncio.run(doubao_tts_stream(self.cfg.tts, translated, on_pcm, self._emit))
         self._emit("[typed] TTS 完成")
