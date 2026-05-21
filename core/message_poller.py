@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import platform
 import time
 import urllib.request
 
 from PySide6.QtCore import QThread, Signal
 
 from core.machine_id import get_machine_id_hash
+from core.version import __version__
 
 
 class MessagePoller(QThread):
@@ -29,7 +31,11 @@ class MessagePoller(QThread):
     def _fetch_count(self) -> int:
         req = urllib.request.Request(
             f"{self._api_base}/api/messages/unread-count",
-            headers={"X-Machine-Id": self._machine_id},
+            headers={
+                "X-Machine-Id": self._machine_id,
+                "X-Client-Version": __version__,
+                "X-Client-Os": f"{platform.system()} {platform.release()}",
+            },
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
