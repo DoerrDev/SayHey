@@ -60,6 +60,7 @@ class GameSubtitlePanel(QFrame):
         self._translation_buffer = SubtitleBuffer(self._set_translation_text)
         self._source_text = ""
         self._translation_text = ""
+        self._show_source = True
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -218,9 +219,13 @@ class GameSubtitlePanel(QFrame):
         self._translation_text = text
         self._render_combined_text()
 
+    def set_show_source(self, show: bool) -> None:
+        self._show_source = bool(show)
+        self._render_combined_text()
+
     def _render_combined_text(self) -> None:
         parts = []
-        if self._source_text.strip():
+        if self._show_source and self._source_text.strip():
             parts.append(self._source_text)
         if self._translation_text.strip():
             parts.append(self._translation_text)

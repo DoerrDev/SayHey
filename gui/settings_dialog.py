@@ -255,6 +255,10 @@ class SettingsDialog(QDialog):
         self._click_through.setChecked(True)
         form.addRow("", self._click_through)
 
+        self._show_source = QCheckBox("翻译字幕中同时显示原文")
+        self._show_source.setChecked(True)
+        form.addRow("", self._show_source)
+
         return w
 
     def _build_usage_tab(self) -> QWidget:
@@ -393,6 +397,7 @@ class SettingsDialog(QDialog):
         self._color_value = s.overlay_text_color
         self._update_color_preview()
         self._click_through.setChecked(s.overlay_click_through)
+        self._show_source.setChecked(s.overlay_show_source)
         self._usage_tracking.setChecked(s.usage_tracking_enabled)
         self._usage_chip_show_token.setChecked(s.usage_chip_show_token)
 
@@ -423,6 +428,7 @@ class SettingsDialog(QDialog):
             overlay_width=self._overlay_width.value(),
             overlay_text_color=self._color_value,
             overlay_click_through=self._click_through.isChecked(),
+            overlay_show_source=self._show_source.isChecked(),
             usage_tracking_enabled=self._usage_tracking.isChecked(),
             usage_chip_show_token=self._usage_chip_show_token.isChecked(),
             volc_trial_enabled=self._volc_trial_enabled.isChecked(),

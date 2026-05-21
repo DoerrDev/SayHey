@@ -188,6 +188,7 @@ class MainWindow(QMainWindow):
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
         self._game_panel.set_max_lines(s.overlay_max_lines)
+        self._game_panel.set_show_source(s.overlay_show_source)
         # Overlay appearance
         self._overlay.set_font_size(s.overlay_font_size)
         self._overlay.set_opacity(s.overlay_opacity)
