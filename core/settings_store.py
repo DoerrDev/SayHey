@@ -38,6 +38,7 @@ class AppSettings:
     overlay_max_lines: int = 2
     overlay_text_color: str = "#ffffff"
     overlay_width: int = 800
+    overlay_show_source: bool = True
     usage_tracking_enabled: bool = False
     usage_chip_show_token: bool = True
     auto_switch_default_mic: bool = False
