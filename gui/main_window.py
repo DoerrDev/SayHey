@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("SayHey")
         self.setMinimumSize(1060, 720)
-        self.resize(1200, 800)
+        self.resize(1700, 900)
 
         self._build_layout()
         self._connect_signals()
