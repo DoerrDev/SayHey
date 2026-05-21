@@ -30,7 +30,7 @@ from gui.mic_area import MicAreaPanel
 from gui.float_input import FloatingInputWindow
 from gui.overlay_window import SubtitleOverlay
 from core.hotkey import GlobalHotkey
-from app_core.typed_engine import VolcTranslateConfig, VolcTtsConfig
+from app_core.typed_engine import DoubaoTranslateConfig, DoubaoTtsConfig, resolve_doubao_tts_speaker
 from app_core.typed_controller import TypedTranslateController, TypedConfig
 from core.bridge import TypedTranslateThread
 from gui.feedback_dialog import FeedbackDialog
@@ -224,12 +224,10 @@ class MainWindow(QMainWindow):
     def _build_typed_controller(self) -> TypedTranslateController:
         s = self._store.get()
         cfg = TypedConfig(
-            translate=VolcTranslateConfig(ak=s.volc_translate_ak, sk=s.volc_translate_sk, region=s.volc_translate_region),
-            tts=VolcTtsConfig(
-                app_key=s.volc_tts_app_key or s.volc_api_key,
-                access_key=s.volc_tts_access_key or s.volc_api_key,
-                speaker_id=s.s2s_speaker_id,
-                resource_id=s.volc_tts_resource_id,
+            translate=DoubaoTranslateConfig(api_key=s.volc_api_key),
+            tts=DoubaoTtsConfig(
+                api_key=s.volc_api_key,
+                speaker_id=resolve_doubao_tts_speaker(s.s2s_speaker_id),
             ),
             source_language=self._typed_panel.selected_source(),
             target_language=self._typed_panel.selected_target(),
@@ -329,6 +327,9 @@ class MainWindow(QMainWindow):
         self._refresh_float_chips()
 
     def _on_hotkey_pressed(self) -> None:
+        if self._float_input.isVisible():
+            self._float_input.hide()
+            return
         self._float_input.show_centered(self.screen())
 
     def _apply_settings(self, s: AppSettings) -> None:

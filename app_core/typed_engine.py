@@ -1,121 +1,112 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import gzip
-import hashlib
-import hmac
 import json
 import struct
 import uuid
 from dataclasses import dataclass
 from typing import Callable, Optional
-from urllib import parse, request
+from urllib import error, request
 
 import websockets
+from websockets.exceptions import InvalidStatusCode
 
 
-# ---------- Volc Machine Translation (REST, sign v4) ----------
+# ---------- Doubao Machine Translation (REST) ----------
 
-_VOLC_MT_HOST = "translate.volcengineapi.com"
-_VOLC_MT_SERVICE = "translate"
-
-
-def _sha256_hex(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _hmac_sha256(key: bytes, msg: str) -> bytes:
-    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
-
-
-def _signed_headers_v4(
-    method: str,
-    host: str,
-    region: str,
-    service: str,
-    query: dict,
-    body: bytes,
-    ak: str,
-    sk: str,
-) -> dict:
-    now = datetime.datetime.utcnow()
-    amz_date = now.strftime("%Y%m%dT%H%M%SZ")
-    date_stamp = now.strftime("%Y%m%d")
-    canonical_uri = "/"
-    sorted_q = sorted(query.items())
-    canonical_query = "&".join(f"{parse.quote(k, safe='-_.~')}={parse.quote(v, safe='-_.~')}" for k, v in sorted_q)
-    payload_hash = _sha256_hex(body)
-    canonical_headers = (
-        f"content-type:application/json\n"
-        f"host:{host}\n"
-        f"x-content-sha256:{payload_hash}\n"
-        f"x-date:{amz_date}\n"
-    )
-    signed_headers = "content-type;host;x-content-sha256;x-date"
-    canonical_request = (
-        f"{method}\n{canonical_uri}\n{canonical_query}\n"
-        f"{canonical_headers}\n{signed_headers}\n{payload_hash}"
-    )
-    credential_scope = f"{date_stamp}/{region}/{service}/request"
-    string_to_sign = (
-        f"HMAC-SHA256\n{amz_date}\n{credential_scope}\n{_sha256_hex(canonical_request.encode())}"
-    )
-    k_date = _hmac_sha256(sk.encode("utf-8"), date_stamp)
-    k_region = _hmac_sha256(k_date, region)
-    k_service = _hmac_sha256(k_region, service)
-    k_signing = _hmac_sha256(k_service, "request")
-    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
-    authorization = (
-        f"HMAC-SHA256 Credential={ak}/{credential_scope}, "
-        f"SignedHeaders={signed_headers}, Signature={signature}"
-    )
-    return {
-        "Content-Type": "application/json",
-        "Host": host,
-        "X-Date": amz_date,
-        "X-Content-Sha256": payload_hash,
-        "Authorization": authorization,
-    }
+_DOUBAO_MT_URL = "https://openspeech.bytedance.com/api/v3/machine_translation/matx_translate"
+_DOUBAO_MT_RESOURCE_ID = "volc.speech.mt"
 
 
 @dataclass
-class VolcTranslateConfig:
-    ak: str
-    sk: str
-    region: str = "cn-north-1"
+class DoubaoTranslateConfig:
+    api_key: str = ""
+    resource_id: str = _DOUBAO_MT_RESOURCE_ID
+    endpoint: str = _DOUBAO_MT_URL
     timeout: float = 8.0
 
 
-def volc_translate_text(cfg: VolcTranslateConfig, text: str, source_lang: str, target_lang: str) -> str:
-    if not cfg.ak or not cfg.sk:
-        raise RuntimeError("未配置 Volc 翻译 AK/SK，请在设置中填写")
-    body_obj: dict = {"TextList": [text], "TargetLanguage": target_lang}
+def doubao_translate_text(cfg: DoubaoTranslateConfig, text: str, source_lang: str, target_lang: str) -> str:
+    if not cfg.api_key:
+        raise RuntimeError("未配置豆包机器翻译 API Key")
+
+    body_obj: dict = {"text_list": [text], "target_language": target_lang}
     if source_lang and source_lang != "auto":
-        body_obj["SourceLanguage"] = source_lang
+        body_obj["source_language"] = source_lang
     body = json.dumps(body_obj, ensure_ascii=False).encode("utf-8")
-    query = {"Action": "TranslateText", "Version": "2020-06-01"}
-    headers = _signed_headers_v4("POST", _VOLC_MT_HOST, cfg.region, _VOLC_MT_SERVICE, query, body, cfg.ak, cfg.sk)
-    url = f"https://{_VOLC_MT_HOST}/?" + parse.urlencode(query)
-    req = request.Request(url, data=body, method="POST", headers=headers)
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Api-Resource-Id": cfg.resource_id or _DOUBAO_MT_RESOURCE_ID,
+        "X-Api-Request-Id": str(uuid.uuid4()),
+    }
+    headers["X-Api-Key"] = cfg.api_key
+
+    req = request.Request(cfg.endpoint or _DOUBAO_MT_URL, data=body, method="POST", headers=headers)
     try:
         with request.urlopen(req, timeout=cfg.timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        detail = _read_http_error_detail(exc)
+        raise RuntimeError(
+            f"豆包机器翻译请求失败：HTTP {exc.code} {exc.reason}。{detail}"
+        ) from exc
     except Exception as exc:
-        raise RuntimeError(f"翻译请求失败：{exc}")
-    err = payload.get("ResponseMetadata", {}).get("Error")
-    if err:
-        raise RuntimeError(f"翻译 API 错误：{err.get('Message') or err}")
-    lst = payload.get("TranslationList") or []
+        raise RuntimeError(f"豆包机器翻译请求失败：{exc}") from exc
+
+    code = payload.get("code")
+    if code != 20000000:
+        raise RuntimeError(f"豆包机器翻译 API 错误：code={code}, message={payload.get('message')}")
+    lst = payload.get("data", {}).get("translation_list") or []
     if not lst:
-        raise RuntimeError("翻译响应为空")
-    return lst[0].get("Translation") or ""
+        raise RuntimeError("豆包机器翻译响应为空")
+    return lst[0].get("translation") or ""
 
 
-# ---------- Volc BigTTS WebSocket V3 streaming ----------
+def _read_http_error_detail(exc: error.HTTPError) -> str:
+    raw = exc.read() if exc.fp is not None else b""
+    if not raw:
+        return "服务端未返回错误详情；请确认 API Key 已开通 volc.speech.mt 权限。"
+    text = raw.decode("utf-8", errors="replace").strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return f"响应体：{text}"
+    code = payload.get("code")
+    message = payload.get("message") or payload.get("ResponseMetadata", {}).get("Error", {}).get("Message")
+    if code or message:
+        if isinstance(message, str) and "requested resource not granted" in message:
+            return (
+                f"code={code}, message={message}。当前 Key 未开通 {_resource_id_from_message(message)} 权限，"
+                "请在豆包语音控制台为该 Key 开通机器翻译大模型资源 volc.speech.mt。"
+            )
+        return f"code={code}, message={message}"
+    return f"响应体：{payload}"
+
+
+def _resource_id_from_message(message: str) -> str:
+    prefix = "[resource_id="
+    if prefix not in message:
+        return "对应资源"
+    start = message.find(prefix) + len(prefix)
+    end = message.find("]", start)
+    if end < 0:
+        return "对应资源"
+    return message[start:end]
+
+
+# ---------- Doubao Speech Synthesis WebSocket V3 streaming ----------
 
 _TTS_WS_URL = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
-_TTS_RESOURCE_ID_DEFAULT = "volc.service_type.10029"
+_TTS_RESOURCE_ID_DEFAULT = "seed-tts-2.0"
+_TTS_SPEAKER_DEFAULT = "zh_female_xiaohe_uranus_bigtts"
+_S2S_TO_TTS_SPEAKER = {
+    "zh_female_vv_jupiter_bigtts": "zh_female_vv_uranus_bigtts",
+    "zh_female_xiaohe_jupiter_bigtts": "zh_female_xiaohe_uranus_bigtts",
+    "zh_male_yunzhou_jupiter_bigtts": "zh_male_m191_uranus_bigtts",
+    "zh_male_xiaotian_jupiter_bigtts": "zh_male_taocheng_uranus_bigtts",
+}
 
 # Binary protocol header
 _PROTOCOL_VERSION = 0b0001
@@ -139,13 +130,22 @@ _EVENT_START_SESSION = 100
 _EVENT_FINISH_SESSION = 102
 _EVENT_TASK_REQUEST = 200
 _EVENT_SESSION_STARTED = 150
+_EVENT_SESSION_FINISHED = 152
 _EVENT_TTS_RESPONSE = 352
 _EVENT_TTS_SENTENCE_START = 350
 _EVENT_TTS_SENTENCE_END = 351
 _EVENT_TTS_ENDED = 359
 
 
-def _pack_frame(msg_type: int, flags: int, serialization: int, compression: int, event: Optional[int], session_id: Optional[str], payload: bytes) -> bytes:
+def _pack_frame(
+    msg_type: int,
+    flags: int,
+    serialization: int,
+    compression: int,
+    event: Optional[int],
+    session_id: Optional[str],
+    payload: bytes,
+) -> bytes:
     if compression == _COMPRESSION_GZIP:
         payload = gzip.compress(payload)
     header = bytes([
@@ -191,7 +191,13 @@ def _parse_frame(data: bytes) -> dict:
         payload_len = struct.unpack(">I", data[offset:offset + 4])[0]
         offset += 4
         payload = data[offset:offset + payload_len]
-        return {"msg_type": msg_type, "event": event, "session_id": session_id, "error_code": err_code, "payload": payload}
+        return {
+            "msg_type": msg_type,
+            "event": event,
+            "session_id": session_id,
+            "error_code": err_code,
+            "payload": payload,
+        }
     payload_len = struct.unpack(">I", data[offset:offset + 4])[0]
     offset += 4
     payload = data[offset:offset + payload_len]
@@ -209,43 +215,59 @@ def _parse_frame(data: bytes) -> dict:
 
 
 @dataclass
-class VolcTtsConfig:
-    app_key: str
-    access_key: str
-    speaker_id: str = "zh_female_xiaohe_jupiter_bigtts"
+class DoubaoTtsConfig:
+    api_key: str
+    speaker_id: str = _TTS_SPEAKER_DEFAULT
     sample_rate: int = 24000
     speech_rate: int = 0
     resource_id: str = _TTS_RESOURCE_ID_DEFAULT
+
+
+def resolve_doubao_tts_speaker(speaker_id: str) -> str:
+    speaker_id = (speaker_id or "").strip()
+    if not speaker_id:
+        return _TTS_SPEAKER_DEFAULT
+    if "_uranus_bigtts" in speaker_id:
+        return speaker_id
+    return _S2S_TO_TTS_SPEAKER.get(speaker_id, _TTS_SPEAKER_DEFAULT)
 
 
 PcmCallback = Callable[[bytes], None]
 StatusCallback = Callable[[str], None]
 
 
-async def volc_tts_stream(
-    cfg: VolcTtsConfig,
+async def doubao_tts_stream(
+    cfg: DoubaoTtsConfig,
     text: str,
     on_pcm: PcmCallback,
     on_status: Optional[StatusCallback] = None,
 ) -> None:
-    if not cfg.app_key or not cfg.access_key:
-        raise RuntimeError("未配置 Volc TTS app_key/access_key")
+    if not cfg.api_key:
+        raise RuntimeError("未配置豆包语音合成 API Key")
     connect_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
     headers = {
-        "X-Api-App-Key": cfg.app_key,
-        "X-Api-Access-Key": cfg.access_key,
+        "X-Api-Key": cfg.api_key,
         "X-Api-Resource-Id": cfg.resource_id or _TTS_RESOURCE_ID_DEFAULT,
         "X-Api-Connect-Id": connect_id,
     }
     import inspect as _inspect
+
     kw = {"max_size": 16 * 1024 * 1024, "ping_interval": None}
     sig = _inspect.signature(websockets.connect)
     if "additional_headers" in sig.parameters:
         kw["additional_headers"] = headers
     else:
         kw["extra_headers"] = headers
-    async with websockets.connect(_TTS_WS_URL, **kw) as ws:
+    try:
+        ws_cm = websockets.connect(_TTS_WS_URL, **kw)
+        ws = await ws_cm
+    except InvalidStatusCode as exc:
+        raise RuntimeError(
+            f"豆包语音合成连接失败：HTTP {exc.status_code}。"
+            f"请确认当前 API Key 已开通 TTS Resource ID {cfg.resource_id or _TTS_RESOURCE_ID_DEFAULT}。"
+        ) from exc
+    try:
         await ws.send(_pack_frame(
             _MSG_FULL_CLIENT, _FLAGS_EVENT, _SERIALIZATION_JSON, _COMPRESSION_NONE,
             _EVENT_START_CONNECTION, None, b"{}",
@@ -276,11 +298,12 @@ async def volc_tts_stream(
             _MSG_FULL_CLIENT, _FLAGS_EVENT, _SERIALIZATION_NONE, _COMPRESSION_NONE,
             _EVENT_FINISH_SESSION, session_id, b"{}",
         ))
+        received_audio = False
         while True:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=15.0)
             except asyncio.TimeoutError:
-                if on_status:
+                if on_status and not received_audio:
                     on_status("[typed-tts] timeout")
                 break
             if isinstance(raw, str):
@@ -289,15 +312,14 @@ async def volc_tts_stream(
             mt = frame.get("msg_type")
             ev = frame.get("event")
             if mt == _MSG_AUDIO_ONLY_SERVER and frame.get("payload"):
+                received_audio = True
                 on_pcm(frame["payload"])
             elif mt == _MSG_ERROR_SERVER:
                 msg = frame.get("payload", b"")
                 if isinstance(msg, bytes):
                     msg = msg.decode("utf-8", errors="ignore")
                 raise RuntimeError(f"TTS 错误：{msg}")
-            elif ev == _EVENT_TTS_ENDED:
-                break
-            elif mt == _MSG_FULL_SERVER and ev == _EVENT_TTS_ENDED:
+            elif ev in {_EVENT_SESSION_FINISHED, _EVENT_TTS_ENDED}:
                 break
         try:
             await ws.send(_pack_frame(
@@ -306,3 +328,5 @@ async def volc_tts_stream(
             ))
         except Exception:
             pass
+    finally:
+        await ws.close()
