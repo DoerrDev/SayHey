@@ -9,6 +9,7 @@ from PySide6.QtCore import QThread, Signal
 
 from app_core.controller import VoiceTranslatorController, AppConfig, build_app_config
 from app_core.game_subtitle_controller import GameSubtitleController, GameSubtitleConfig, build_game_subtitle_config
+from app_core.typed_controller import TypedTranslateController, TypedConfig
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
@@ -81,6 +82,29 @@ class GameSubtitleThread(QThread):
     def request_stop(self) -> None:
         if self._controller is not None:
             self._controller.request_stop()
+
+
+class TypedTranslateThread(QThread):
+    sig_status = Signal(str)
+    sig_result = Signal(str, str)   # source, translated
+    sig_done = Signal()
+    sig_error = Signal(str)
+
+    def __init__(self, controller: TypedTranslateController, text: str, parent=None) -> None:
+        super().__init__(parent)
+        self._controller = controller
+        self._text = text
+
+    def run(self) -> None:
+        try:
+            self._controller.on_status = self.sig_status.emit
+            self._controller.on_result = lambda s, t: self.sig_result.emit(s, t)
+            self._controller.translate_and_send(self._text)
+        except Exception as exc:
+            self.sig_error.emit(str(exc))
+            traceback.print_exc()
+        finally:
+            self.sig_done.emit()
 
 
 def build_mic_config(env_path: Path = _ENV_PATH) -> AppConfig:

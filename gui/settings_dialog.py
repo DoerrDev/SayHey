@@ -66,6 +66,7 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(self._build_volc_tab(), "🌋 火山引擎")
         self._tabs.addTab(self._build_openai_tab(), "✨ OpenAI")
         self._tabs.addTab(self._build_volc_trial_tab(), "🎁 火山引擎试用")
+        self._tabs.addTab(self._build_typed_tab(), "⌨️ 打字翻译")
         self._tabs.addTab(self._build_overlay_tab(), "💬 字幕外观")
         self._tabs.addTab(self._build_usage_tab(), "📊 用量统计")
 
@@ -200,6 +201,56 @@ class SettingsDialog(QDialog):
         btn_row.addWidget(refresh_btn)
         btn_row.addStretch()
         form.addRow("", btn_row)
+
+        return w
+
+    def _build_typed_tab(self) -> QWidget:
+        w = self._tab_widget()
+        form = QFormLayout(w)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        intro = QLabel(
+            "打字翻译使用：火山「机器翻译」(AK/SK 签名) + 火山「BigTTS」(AppKey/AccessKey) 流式 TTS，"
+            "音频写入 CABLE Input 虚拟声卡。\nTTS 若不另填，将复用上方火山 App Key。"
+        )
+        intro.setObjectName("routeLabel")
+        intro.setWordWrap(True)
+        form.addRow("", intro)
+
+        form.addRow(_section_title("火山机器翻译（TranslateText）"))
+        self._volc_translate_ak = _password_line()
+        self._volc_translate_ak.setPlaceholderText("Access Key ID (AKLT...)")
+        form.addRow("Access Key", self._volc_translate_ak)
+        self._volc_translate_sk = _password_line()
+        self._volc_translate_sk.setPlaceholderText("Secret Access Key")
+        form.addRow("Secret Key", self._volc_translate_sk)
+        self._volc_translate_region = QLineEdit()
+        self._volc_translate_region.setPlaceholderText("cn-north-1")
+        form.addRow("Region", self._volc_translate_region)
+
+        form.addRow(_section_title("火山 BigTTS（可留空复用上面 App Key）"))
+        self._volc_tts_app_key = _password_line()
+        self._volc_tts_app_key.setPlaceholderText("X-Api-App-Key（留空使用火山 App Key）")
+        form.addRow("App Key", self._volc_tts_app_key)
+        self._volc_tts_access_key = _password_line()
+        self._volc_tts_access_key.setPlaceholderText("X-Api-Access-Key（留空使用火山 App Key）")
+        form.addRow("Access Key", self._volc_tts_access_key)
+
+        self._volc_tts_resource_id = QLineEdit()
+        self._volc_tts_resource_id.setPlaceholderText("volc.service_type.10029")
+        form.addRow("Resource ID", self._volc_tts_resource_id)
+
+        hint = QLabel(
+            "Resource ID 对照（按音色后缀选）：\n"
+            "  • _bigtts（旧大模型 V1）→ volc.service_type.10029\n"
+            "  • _jupiter_bigtts / 豆包 2.0 → volc.service_type.10048\n"
+            "  • 声音复刻 2.0（S_ 开头）→ volc.megatts.default"
+        )
+        hint.setObjectName("routeLabel")
+        hint.setWordWrap(True)
+        form.addRow("", hint)
 
         return w
 
@@ -405,6 +456,13 @@ class SettingsDialog(QDialog):
         self._volc_trial_token.setText(s.volc_trial_token)
         self._volc_trial_proxy_ws_url.setText(s.volc_trial_proxy_ws_url)
         self._volc_trial_api_base.setText(s.volc_trial_api_base)
+
+        self._volc_translate_ak.setText(s.volc_translate_ak)
+        self._volc_translate_sk.setText(s.volc_translate_sk)
+        self._volc_translate_region.setText(s.volc_translate_region)
+        self._volc_tts_app_key.setText(s.volc_tts_app_key)
+        self._volc_tts_access_key.setText(s.volc_tts_access_key)
+        self._volc_tts_resource_id.setText(s.volc_tts_resource_id)
         if s.volc_trial_token:
             self._refresh_trial_balance()
         else:
@@ -435,6 +493,12 @@ class SettingsDialog(QDialog):
             volc_trial_token=self._volc_trial_token.text().strip(),
             volc_trial_proxy_ws_url=self._volc_trial_proxy_ws_url.text().strip() or s.volc_trial_proxy_ws_url,
             volc_trial_api_base=self._volc_trial_api_base.text().strip() or s.volc_trial_api_base,
+            volc_translate_ak=self._volc_translate_ak.text().strip(),
+            volc_translate_sk=self._volc_translate_sk.text().strip(),
+            volc_translate_region=self._volc_translate_region.text().strip() or s.volc_translate_region,
+            volc_tts_app_key=self._volc_tts_app_key.text().strip(),
+            volc_tts_access_key=self._volc_tts_access_key.text().strip(),
+            volc_tts_resource_id=self._volc_tts_resource_id.text().strip() or s.volc_tts_resource_id,
         )
 
     @Slot()
