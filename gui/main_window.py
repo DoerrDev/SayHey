@@ -348,11 +348,13 @@ class MainWindow(QMainWindow):
             st = self._usage_tracker.state
             self._header.set_usage(st.session_cost, st.total_cost, st.session_tokens, st.total_tokens)
         self._mic_panel.set_mic_by_index(s.mic_input_index)
+        self._mic_panel.set_output_by_index(s.mic_output_index)
         self._mic_panel.set_engine(s.translator_engine)
         self._mic_panel.set_source_language(s.s2s_source_language)
         self._mic_panel.set_target_language(s.s2s_target_language)
         self._mic_panel.set_speaker_id(s.s2s_speaker_id)
         self._mic_panel.set_simultaneous_interpretation_enabled(s.mic_simultaneous_interpretation_enabled)
+        self._mic_panel.set_speech_rate(s.s2s_speech_rate)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
         self._game_panel.set_audio_devices(_list_speaker_names(), s.game_audio_device_name)
@@ -389,6 +391,7 @@ class MainWindow(QMainWindow):
         tgt_lang = self._mic_panel.selected_target_language()
         speaker_id = self._mic_panel.selected_speaker_id()
         simultaneous_enabled = self._mic_panel.simultaneous_interpretation_enabled()
+        speech_rate = self._mic_panel.selected_speech_rate()
 
         if simultaneous_enabled and src_lang == tgt_lang and src_lang != "auto":
             QMessageBox.warning(self, "语言设置", "源语言和目标语言不能相同")
@@ -401,25 +404,31 @@ class MainWindow(QMainWindow):
                     "未检测到火山引擎 App Key。\n\n"
                     "请点击右上角齿轮图标 → 火山引擎选项卡，填写 App Key 后保存。"
                 )
+            out_device = self._mic_panel.selected_output_device()
             config.audio_route = replace(
                 config.audio_route,
                 input_device_index=device.index,
                 input_device_name=None,
+                output_device_index=out_device.index if out_device else None,
+                output_device_name=out_device.name if out_device else config.audio_route.output_device_name,
             )
             config.engine_name = engine
             config.source_language = src_lang
             config.target_language = tgt_lang
             config.speaker_id = speaker_id
             config.simultaneous_interpretation_enabled = simultaneous_enabled
+            config.speech_rate = speech_rate
             self._store.save(
                 replace(
                     self._store.get(),
                     mic_input_index=device.index,
+                    mic_output_index=(out_device.index if out_device else None),
                     translator_engine=engine,
                     s2s_source_language=src_lang,
                     s2s_target_language=tgt_lang,
                     s2s_speaker_id=speaker_id,
                     mic_simultaneous_interpretation_enabled=simultaneous_enabled,
+                    s2s_speech_rate=speech_rate,
                 )
             )
         except Exception as exc:
@@ -617,10 +626,21 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_voice_selector(self) -> None:
-        dlg = VoiceSelectorDialog(self._mic_panel.selected_speaker_id(), parent=self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-        speaker_id = dlg.selected_voice
+        dlg = getattr(self, "_voice_dlg", None)
+        if dlg is None:
+            dlg = VoiceSelectorDialog(self._mic_panel.selected_speaker_id(), parent=self)
+            dlg.voice_selected.connect(self._on_voice_selected)
+            self._voice_dlg = dlg
+        else:
+            dlg._current_voice = self._mic_panel.selected_speaker_id()
+            dlg._refresh_rows()
+            dlg._update_selected_label()
+        dlg.show()
+        dlg.raise_()
+        dlg.activateWindow()
+
+    @Slot(str)
+    def _on_voice_selected(self, speaker_id: str) -> None:
         self._mic_panel.set_speaker_id(speaker_id)
         self._store.save(replace(self._store.get(), s2s_speaker_id=speaker_id))
         self._log_panel.append(f"火山音色已选择: {speaker_id or '服务默认音色'}")

@@ -77,7 +77,11 @@ class VoiceTranslatorController:
                 self.config.audio_route.input_device_name,
             )
             mic_candidates = self.resolver.stable_input_candidates(mic_device)
-            cable_input = self.resolver.resolve_cable_input(self.config.audio_route.output_device_name)
+            out_idx = self.config.audio_route.output_device_index
+            if out_idx is not None and 0 <= int(out_idx) < len(self.resolver.devices):
+                cable_input = self.resolver.get(int(out_idx))
+            else:
+                cable_input = self.resolver.resolve_cable_input(self.config.audio_route.output_device_name)
             self._emit_status(
                 f"Input #{mic_device.index} {mic_device.name} ({int(mic_device.default_samplerate)} Hz) -> "
                 f"Output #{cable_input.index} {cable_input.name} ({int(cable_input.default_samplerate)} Hz)"
