@@ -214,11 +214,11 @@ class SettingsDialog(QDialog):
         form.addRow("", self._volc_trial_enabled)
 
         self._volc_trial_api_base = QLineEdit()
-        self._volc_trial_api_base.setPlaceholderText("https://huoshanproxy.doerr.work")
+        self._volc_trial_api_base.setPlaceholderText("https://trial.sayhey.top")
         form.addRow("服务地址", self._volc_trial_api_base)
 
         self._volc_trial_proxy_ws_url = QLineEdit()
-        self._volc_trial_proxy_ws_url.setPlaceholderText("wss://huoshanproxy.doerr.work/api/v4/ast/v2/translate")
+        self._volc_trial_proxy_ws_url.setPlaceholderText("wss://trial.sayhey.top/api/v4/ast/v2/translate")
         form.addRow("代理 WS URL", self._volc_trial_proxy_ws_url)
 
         self._volc_trial_token = QLineEdit()
@@ -347,7 +347,7 @@ class SettingsDialog(QDialog):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        api_base = self._volc_trial_api_base.text().strip() or "https://huoshanproxy.doerr.work"
+        api_base = self._volc_trial_api_base.text().strip() or "https://trial.sayhey.top"
         machine_id = get_machine_id_hash()
         body = json.dumps({"machine_id_hash": machine_id, "ts": int(time.time())}).encode("utf-8")
         req = urllib.request.Request(
@@ -377,7 +377,7 @@ class SettingsDialog(QDialog):
     def _refresh_trial_balance(self) -> None:
         import json, urllib.request
         token = self._volc_trial_token.text().strip()
-        api_base = self._volc_trial_api_base.text().strip() or "https://huoshanproxy.doerr.work"
+        api_base = self._volc_trial_api_base.text().strip() or "https://trial.sayhey.top"
         if not token:
             self._volc_trial_balance.setText("余额：未申请")
             return

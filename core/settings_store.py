@@ -44,8 +44,8 @@ class AppSettings:
     auto_switch_mic_keyword: str = "CABLE Output"
     volc_trial_enabled: bool = False
     volc_trial_token: str = ""
-    volc_trial_proxy_ws_url: str = "wss://huoshanproxy.doerr.work/api/v4/ast/v2/translate"
-    volc_trial_api_base: str = "https://huoshanproxy.doerr.work"
+    volc_trial_proxy_ws_url: str = "wss://trial.sayhey.top/api/v4/ast/v2/translate"
+    volc_trial_api_base: str = "https://trial.sayhey.top"
     feedback_nickname: str = ""
     typed_source_language: str = "zh"
     typed_target_language: str = "en"
