@@ -27,6 +27,59 @@ from PySide6.QtCore import Qt
 from core.settings_store import AppSettings, SettingsStore
 
 
+VOLC_BILLING_DOC_URL = "https://www.volcengine.com/docs/6561/1359370?lang=zh"
+VOLC_BILLING_DOC_TITLE = "火山引擎豆包语音《计费说明》"
+VOLC_BILLING_DOC_UPDATED = "2026.05.19"
+
+
+def _doubao_billing_html() -> str:
+    return f"""
+    <div style="color:#9fb7ca; font-size:12px; line-height:1.45;">
+      <p style="margin:0 0 8px 0;">
+        当前应用用到 3 条豆包链路：语音同传 / 字幕走同声传译大模型，打字翻译走机器翻译模型，
+        打字后的语音发送走豆包语音合成模型 2.0。所有价格均以官方计费页为准。
+      </p>
+      <table cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%;">
+        <tr style="color:#d8ecff;">
+          <th align="left">功能</th>
+          <th align="left">模型与资源</th>
+          <th align="left">主要费率</th>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">同声传译（S2S）</b><br/>麦克风语音 → 翻译字幕 + 翻译语音</td>
+          <td>豆包同声传译大模型<br/><code>volc.service_type.10053</code></td>
+          <td>输入 ¥80 / 百万 token<br/>输出文本 ¥80 / 百万 token<br/>输出音频 ¥300 / 百万 token</td>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">游戏字幕（S2T）</b><br/>电脑声音 → 翻译字幕</td>
+          <td>豆包同声传译大模型<br/><code>volc.service_type.10053</code></td>
+          <td>输入 ¥80 / 百万 token<br/>输出文本 ¥80 / 百万 token<br/>不生成翻译语音时不产生输出音频项</td>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">打字翻译</b><br/>文本 → 译文</td>
+          <td>豆包机器翻译模型<br/><code>volc.speech.mt</code></td>
+          <td>输入 ¥1.8 / 百万 token<br/>输出 ¥5.4 / 百万 token<br/>资源包参考：¥1.62 / 百万 token 起</td>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">打字语音输出</b><br/>译文 → 语音发送</td>
+          <td>豆包语音合成模型 2.0<br/>豆包语音合成模型2.0<br/><code>seed-tts-2.0</code></td>
+          <td>后付费 ¥3 / 万字符<br/>资源包参考：¥2.8 / 万字符 起</td>
+        </tr>
+      </table>
+      <p style="margin:8px 0 0 0;">
+        <b style="color:#d8ecff;">计费口径：</b>
+        同声传译按 token 计费；官方说明中，输入音频约 1 秒折算 6.25 token，输出音频约 1 秒折算 25 token。
+        机器翻译按输入 / 输出 token 分项计费；语音合成 2.0 按合成字符数计费。
+      </p>
+      <p style="margin:8px 0 0 0;">
+        <b style="color:#d8ecff;">引用：</b>
+        {VOLC_BILLING_DOC_TITLE}，更新时间 {VOLC_BILLING_DOC_UPDATED}：
+        <a style="color:#4f8cff;" href="{VOLC_BILLING_DOC_URL}">{VOLC_BILLING_DOC_URL}</a>
+      </p>
+    </div>
+    """
+
+
 def _password_line() -> QLineEdit:
     edit = QLineEdit()
     edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -64,6 +117,7 @@ class SettingsDialog(QDialog):
         root.addWidget(self._tabs, 1)
 
         self._tabs.addTab(self._build_volc_tab(), "🌋 火山引擎")
+        self._tabs.addTab(self._build_billing_tab(), "💰 AI 模型与费用")
         self._tabs.addTab(self._build_openai_tab(), "✨ OpenAI")
         self._tabs.addTab(self._build_volc_trial_tab(), "🎁 火山引擎试用")
         self._tabs.addTab(self._build_overlay_tab(), "💬 字幕外观")
@@ -108,38 +162,35 @@ class SettingsDialog(QDialog):
         self._volc_ws_url.setPlaceholderText("wss://openspeech.bytedance.com/api/v4/ast/v2/translate")
         form.addRow("WS URL", self._volc_ws_url)
 
-        form.addRow(_section_title("豆包产品线能力"))
-        doubao_note = QLabel(
+        permission_note = QLabel(
             "同一个 Key 需要开通这些资源权限：语音同传 volc.service_type.10053、"
-            "机器翻译大模型 volc.speech.mt、语音合成 2.0 seed-tts-2.0。\n"
-            "如果打字翻译提示 requested resource not granted，请在控制台给当前 Key 开通 volc.speech.mt。\n"
-            "打字 TTS 使用豆包语音合成 2.0 音色池；同传的 saturn/jupiter 音色会自动映射或降级为兼容音色。"
+            "机器翻译模型 volc.speech.mt、语音合成 2.0 seed-tts-2.0。"
+            "如果打字翻译提示 requested resource not granted，请在控制台给当前 Key 开通对应资源。"
         )
+        permission_note.setObjectName("routeLabel")
+        permission_note.setWordWrap(True)
+        form.addRow("", permission_note)
+
+        return w
+
+    def _build_billing_tab(self) -> QWidget:
+        w = self._tab_widget()
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        title = _section_title("AI 模型与费率说明")
+        layout.addWidget(title)
+
+        doubao_note = QLabel(_doubao_billing_html())
         doubao_note.setObjectName("routeLabel")
+        doubao_note.setTextFormat(Qt.TextFormat.RichText)
+        doubao_note.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        doubao_note.setOpenExternalLinks(True)
         doubao_note.setWordWrap(True)
-        form.addRow("", doubao_note)
+        layout.addWidget(doubao_note)
 
-        form.addRow(_section_title("游戏字幕语言（S2T 模式）"))
-
-        from gui.game_panel import HUOSHAN_FOREIGN_LANGUAGES, HUOSHAN_DIALECTS
-
-        self._game_src_lang = QComboBox()
-        for name, code in HUOSHAN_FOREIGN_LANGUAGES:
-            self._game_src_lang.addItem(name, code)
-        for name, code in HUOSHAN_DIALECTS:
-            self._game_src_lang.addItem(name, code)
-        form.addRow("游戏语言（源）", self._game_src_lang)
-
-        self._game_tgt_lang = QComboBox()
-        for name, code in HUOSHAN_FOREIGN_LANGUAGES:
-            self._game_tgt_lang.addItem(name, code)
-        form.addRow("字幕语言（目标）", self._game_tgt_lang)
-
-        note = QLabel("提示：源语言或目标语言中，至少有一个须为中文或英语。方言仅可作为源语言。")
-        note.setObjectName("routeLabel")
-        note.setWordWrap(True)
-        form.addRow("", note)
-
+        layout.addStretch(1)
         return w
 
     def _build_openai_tab(self) -> QWidget:
@@ -291,7 +342,7 @@ class SettingsDialog(QDialog):
 
         note = QLabel(
             "依据火山引擎计费(每百万 token):\n"
-            "  · 输入音频 ¥80   · 输出文本 ¥30   · 输出音频 ¥300\n"
+            "  · 输入音频 ¥80   · 输出文本 ¥80   · 输出音频 ¥300\n"
             "  · 缓存输入 ¥5    · 输入文本 ¥10"
         )
         note.setObjectName("routeLabel")
@@ -390,14 +441,6 @@ class SettingsDialog(QDialog):
         self._volc_resource_id.setText(s.volc_resource_id)
         self._volc_ws_url.setText(s.volc_ws_url)
 
-        def _set_combo(combo: QComboBox, code: str) -> None:
-            idx = combo.findData(code)
-            if idx >= 0:
-                combo.setCurrentIndex(idx)
-
-        _set_combo(self._game_src_lang, s.game_subtitle_source_language)
-        _set_combo(self._game_tgt_lang, s.game_subtitle_target_language)
-
         self._openai_api_key.setText(s.openai_api_key)
         self._openai_ws_url.setText(s.openai_ws_url)
 
@@ -430,8 +473,6 @@ class SettingsDialog(QDialog):
             volc_api_key=self._volc_api_key.text().strip(),
             volc_resource_id=self._volc_resource_id.text().strip() or s.volc_resource_id,
             volc_ws_url=self._volc_ws_url.text().strip() or s.volc_ws_url,
-            game_subtitle_source_language=self._game_src_lang.currentData() or s.game_subtitle_source_language,
-            game_subtitle_target_language=self._game_tgt_lang.currentData() or s.game_subtitle_target_language,
             openai_api_key=self._openai_api_key.text().strip(),
             openai_ws_url=self._openai_ws_url.text().strip() or s.openai_ws_url,
             overlay_max_lines=self._overlay_max_lines.value(),
