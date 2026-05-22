@@ -55,7 +55,7 @@ class GameSubtitlePanel(QFrame):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setObjectName("card")
+        self.setObjectName("cardLeft")
         self._is_running = False
         self._source_buffer = SubtitleBuffer(self._set_source_text)
         self._translation_buffer = SubtitleBuffer(self._set_translation_text)

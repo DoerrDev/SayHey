@@ -45,7 +45,7 @@ class TypedTranslatePanel(QFrame):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setObjectName("card")
+        self.setObjectName("tabContent")
         self._build_ui()
 
     def _build_ui(self) -> None:

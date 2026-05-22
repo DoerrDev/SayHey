@@ -15,6 +15,9 @@ from PySide6.QtWidgets import (
 from app_core.audio_devices import AudioDevice, DeviceResolver
 from gui.subtitle_buffer import SubtitleBuffer
 from gui.icons import icon as _icon
+from gui.voice_selector_dialog import S2S_VOICE_TYPES
+
+_S2S_ALLOWED_TARGETS = {"zh", "en"}
 
 HUOSHAN_LANGUAGES = [
     ("Chinese", "zh"),
@@ -47,10 +50,11 @@ class MicTranslatePanel(QFrame):
     sig_select_voice = Signal()
     sig_speaker_id_changed = Signal(str)
     sig_running_changed = Signal(bool)
+    sig_voice_warning = Signal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setObjectName("card")
+        self.setObjectName("tabContent")
         self._is_running = False
         self._resolver = DeviceResolver()
         self._mic_devices: list[AudioDevice] = []
@@ -100,6 +104,7 @@ class MicTranslatePanel(QFrame):
         lang_row.addWidget(self._tgt_lang_combo, 1)
         layout.addLayout(lang_row)
         self._populate_language_combos("huoshan")
+        self._tgt_lang_combo.currentIndexChanged.connect(self._enforce_s2s_voice_constraint)
 
         # Source text (single-line compact)
         self._source_edit = QLabel("")
@@ -213,6 +218,17 @@ class MicTranslatePanel(QFrame):
     def set_speaker_id(self, speaker_id: str) -> None:
         self._speaker_id = speaker_id.strip()
         self.sig_speaker_id_changed.emit(self._speaker_id)
+        self._enforce_s2s_voice_constraint()
+
+    def _enforce_s2s_voice_constraint(self) -> None:
+        if self._speaker_id not in S2S_VOICE_TYPES:
+            return
+        target = self.selected_target_language()
+        if target in _S2S_ALLOWED_TARGETS:
+            return
+        self._speaker_id = ""
+        self.sig_speaker_id_changed.emit("")
+        self.sig_voice_warning.emit("当前同传音色仅支持中/英目标语言，已切换为默认音色")
 
     @Slot()
     def _on_toggle(self) -> None:

@@ -24,7 +24,7 @@ class MicAreaPanel(QFrame):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setObjectName("card")
+        self.setObjectName("cardRight")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(8)
@@ -54,7 +54,7 @@ class MicAreaPanel(QFrame):
         self.voice.sig_running_changed.connect(lambda running: self._voice_btn.setEnabled(not running))
 
     def _on_speaker_id_changed(self, speaker_id: str) -> None:
-        self._voice_btn.setText(" 音色 ✓" if speaker_id else " 音色")
+        self._voice_btn.setText(" 音色")
 
     def select_typed(self) -> None:
         self._tabs.setCurrentIndex(1)

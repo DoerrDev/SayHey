@@ -97,7 +97,7 @@ class HeaderBar(QWidget):
 
         self._adjust_btn = QPushButton(_icon("move"), " 调整字幕位置")
         self._adjust_btn.setObjectName("secondary")
-        self._adjust_btn.setFixedWidth(120)
+        self._adjust_btn.setFixedWidth(150)
         self._adjust_btn.setCheckable(True)
         self._adjust_btn.toggled.connect(self.sig_adjust_overlay.emit)
         layout.addWidget(self._adjust_btn)
