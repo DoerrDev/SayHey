@@ -174,12 +174,9 @@ QComboBox::drop-down {
     width: 20px;
 }
 QComboBox::down-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 6px solid rgba(163, 207, 255, 0.55);
-    width: 0;
-    height: 0;
+    image: url(resource/icons/chevron-down-brand.svg);
+    width: 14px;
+    height: 14px;
     margin-right: 8px;
 }
 QComboBox QAbstractItemView {
@@ -263,20 +260,14 @@ QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
     background: rgba(66, 221, 146, 0.18);
 }
 QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-bottom: 5px solid rgba(163, 207, 255, 0.65);
-    width: 0;
-    height: 0;
+    image: url(resource/icons/chevron-up-brand.svg);
+    width: 12px;
+    height: 12px;
 }
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid rgba(163, 207, 255, 0.65);
-    width: 0;
-    height: 0;
+    image: url(resource/icons/chevron-down-brand.svg);
+    width: 12px;
+    height: 12px;
 }
 QSlider::groove:horizontal {
     background: rgba(163, 207, 255, 0.12);
