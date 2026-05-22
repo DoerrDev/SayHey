@@ -38,6 +38,8 @@ from gui.feedback_dialog import FeedbackDialog
 from gui.settings_dialog import SettingsDialog
 from gui.usage_dialog import UsageDialog
 from gui.voice_selector_dialog import VoiceSelectorDialog
+from gui.rvc_model_dialog import RvcModelDialog
+from app_core.rvc_client import DEFAULT_MODELS_DIR, RvcConfig, RvcModel
 from core.usage_tracker import UsageTracker
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -195,6 +197,20 @@ class MainWindow(QMainWindow):
         # Typed panel
         self._typed_panel.sig_translate_requested.connect(self._on_typed_submit)
         self._typed_panel.sig_settings_changed.connect(self._on_typed_settings_changed)
+
+        # Voice changer panel
+        self._changer_panel = self._mic_area.changer
+        self._rvc_dialog: Optional[RvcModelDialog] = None
+        self._changer_panel.sig_open_model_manager.connect(self._open_rvc_model_dialog)
+        self._changer_panel.sig_enabled_changed.connect(self._on_rvc_settings_changed)
+        self._changer_panel.sig_pitch_changed.connect(self._on_rvc_settings_changed)
+        self._changer_panel.sig_index_rate_changed.connect(self._on_rvc_settings_changed)
+        self._changer_panel.sig_device_changed.connect(self._on_rvc_settings_changed)
+        self._changer_panel.sig_mic_changed.connect(self._mic_panel.set_mic_by_index)
+        self._changer_panel.sig_output_changed.connect(self._mic_panel.set_output_by_index)
+        self._changer_panel.sig_action_install.connect(self._on_rvc_install)
+        self._changer_panel.sig_action_start.connect(self._on_rvc_start)
+        self._changer_panel.sig_action_stop.connect(self._on_rvc_stop)
 
         # Checklist
         self._checklist.sig_status.connect(self._on_status)
@@ -372,6 +388,14 @@ class MainWindow(QMainWindow):
         self._typed_panel.set_source(s.typed_source_language)
         self._typed_panel.set_target(s.typed_target_language)
         self._typed_panel.set_auto_tts(s.typed_auto_tts)
+        # Voice changer settings
+        self._changer_panel.set_enabled_state(s.rvc_enabled)
+        self._changer_panel.set_pitch(s.rvc_pitch)
+        self._changer_panel.set_index_rate(s.rvc_index_rate)
+        self._changer_panel.set_device(s.rvc_device)
+        self._changer_panel.set_current_model(s.rvc_model_name)
+        self._changer_panel.set_mic_by_index(s.mic_input_index)
+        self._changer_panel.set_output_by_index(s.mic_output_index)
         self._apply_hotkeys(s)
 
     @Slot()
@@ -416,6 +440,23 @@ class MainWindow(QMainWindow):
             config.speaker_id = speaker_id
             config.simultaneous_interpretation_enabled = simultaneous_enabled
             config.speech_rate = speech_rate
+            s_now = self._store.get()
+            if not simultaneous_enabled and s_now.rvc_enabled:
+                rvc_cfg = RvcConfig(
+                    enabled=True,
+                    model_name=s_now.rvc_model_name,
+                    pitch=s_now.rvc_pitch,
+                    index_rate=s_now.rvc_index_rate,
+                    port=s_now.rvc_sidecar_port,
+                    device=s_now.rvc_device,
+                    models_dir=DEFAULT_MODELS_DIR,
+                )
+                model = self._resolve_rvc_model(s_now.rvc_model_name)
+                if model is None:
+                    QMessageBox.warning(self, "变声器", "未选择 RVC 模型，请先在「变声器」Tab 中导入并选择模型。")
+                    return
+                config.rvc = rvc_cfg
+                config.rvc_model = model
             self._store.save(
                 replace(
                     self._store.get(),
@@ -434,6 +475,8 @@ class MainWindow(QMainWindow):
             return
 
         self._mic_panel.set_running(True)
+        if config.rvc is not None and config.rvc.enabled:
+            self._changer_panel.set_running(True)
         self._header.set_status("翻译启动中...", "warn")
 
         self._mic_thread = ControllerThread(config, parent=self)
@@ -453,6 +496,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_mic_stopped(self) -> None:
         self._mic_panel.set_running(False)
+        self._changer_panel.set_running(False)
         self._mic_thread = None
         self._header.set_status("就绪")
         self._log_panel.append("麦克风翻译已停止")
@@ -460,6 +504,7 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_mic_error(self, msg: str) -> None:
         self._mic_panel.set_running(False)
+        self._changer_panel.set_running(False)
         self._mic_thread = None
         self._header.set_status("错误", "error")
         QMessageBox.critical(self, "运行错误", msg)
@@ -660,6 +705,74 @@ class MainWindow(QMainWindow):
         s = self._store.get()
         from dataclasses import replace
         self._store.save(replace(s, overlay_x=x, overlay_y=y))
+
+    def _resolve_rvc_model(self, name: str) -> Optional[RvcModel]:
+        if not name:
+            return None
+        for m in RvcModel.scan(DEFAULT_MODELS_DIR):
+            if m.name == name:
+                return m
+        return None
+
+    @Slot()
+    def _open_rvc_model_dialog(self) -> None:
+        if self._rvc_dialog is None:
+            self._rvc_dialog = RvcModelDialog(
+                current_model=self._store.get().rvc_model_name,
+                models_dir=DEFAULT_MODELS_DIR,
+                parent=self,
+            )
+            self._rvc_dialog.model_selected.connect(self._on_rvc_model_selected)
+        else:
+            self._rvc_dialog._current_model = self._store.get().rvc_model_name
+            self._rvc_dialog._reload()
+        self._rvc_dialog.show()
+        self._rvc_dialog.raise_()
+        self._rvc_dialog.activateWindow()
+
+    @Slot(str)
+    def _on_rvc_model_selected(self, name: str) -> None:
+        self._changer_panel.set_current_model(name)
+        self._store.save(replace(self._store.get(), rvc_model_name=name))
+        self._log_panel.append(f"RVC 模型已选择: {name or '未选择'}")
+
+    @Slot()
+    def _on_rvc_install(self) -> None:
+        self._log_panel.append("开始初始化 RVC sidecar 环境...")
+        self._changer_panel.begin_install()
+
+    @Slot()
+    def _on_rvc_start(self) -> None:
+        if self._mic_thread is not None and self._mic_thread.isRunning():
+            QMessageBox.warning(self, "变声器", "麦克风管线已在运行，请先停止当前任务。")
+            return
+        model_name = self._changer_panel.current_model() or self._store.get().rvc_model_name
+        if not model_name:
+            QMessageBox.warning(self, "变声器", "请先选择 RVC 模型。")
+            return
+        self._mic_panel.set_simultaneous_interpretation_enabled(False)
+        self._changer_panel.set_enabled_state(True)
+        self._store.save(replace(
+            self._store.get(),
+            mic_simultaneous_interpretation_enabled=False,
+            rvc_enabled=True,
+        ))
+        self._changer_panel.set_starting()
+        self._start_mic()
+
+    @Slot()
+    def _on_rvc_stop(self) -> None:
+        self._stop_mic()
+
+    @Slot()
+    def _on_rvc_settings_changed(self, *args) -> None:
+        self._store.save(replace(
+            self._store.get(),
+            rvc_enabled=self._changer_panel.is_enabled(),
+            rvc_pitch=self._changer_panel.pitch(),
+            rvc_index_rate=self._changer_panel.index_rate(),
+            rvc_device=self._changer_panel.device(),
+        ))
 
     def closeEvent(self, event) -> None:
         if self._mic_thread and self._mic_thread.isRunning():

@@ -9,6 +9,14 @@ set "RAW_DIST_DIR=%DIST_DIR%\main.dist"
 set "FINAL_DIST_DIR=%DIST_DIR%\%APP_NAME%"
 set "ZIP_PATH=%DIST_DIR%\%APP_NAME%-windows.zip"
 
+echo [SayHey] Fetching embedded Python (for RVC sidecar)...
+python scripts\fetch_python_embed.py
+if errorlevel 1 (
+    echo [SayHey] fetch_python_embed FAILED.
+    pause
+    exit /b 1
+)
+
 echo [SayHey] Building SayHey with Nuitka...
 
 python -m nuitka ^
@@ -23,6 +31,7 @@ python -m nuitka ^
     --include-package=core ^
     --include-package=python_protogen ^
     --include-data-dir=resource=resource ^
+    --include-data-dir=rvc_sidecar=rvc_sidecar ^
     --include-module=sounddevice ^
     --include-module=soundcard ^
     --include-package-data=soundcard ^

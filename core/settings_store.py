@@ -55,6 +55,12 @@ class AppSettings:
     hotkey_si_toggle: str = ""
     hotkey_subtitle_drag_toggle: str = ""
     hotkey_typed_tts_toggle: str = ""
+    rvc_enabled: bool = False
+    rvc_model_name: str = ""
+    rvc_pitch: int = 0
+    rvc_index_rate: float = 0.5
+    rvc_device: str = "auto"
+    rvc_sidecar_port: int = 7861
 
 
 class SettingsStore:

@@ -11,6 +11,7 @@ from typing import Callable, Optional
 from app_core.audio_devices import AudioDevice, DeviceResolver
 from app_core.audio_io import AudioInputSource, AudioOutputSink, AudioRouteConfig
 from app_core.mock_engine import MockTranslatorEngine
+from app_core.rvc_client import RvcConfig, RvcModel, RvcSidecarManager
 from app_core.translator import TranslatorConfig, TranslatorEvent
 from app_core.volc_engine import VolcAstS2SEngine
 
@@ -35,6 +36,8 @@ class AppConfig:
     sample_rate: int = 16000
     output_channels: int = 2
     engine_name: str = "huoshan"
+    rvc: Optional[RvcConfig] = None
+    rvc_model: Optional[RvcModel] = None
 
 
 class VoiceTranslatorController:
@@ -66,6 +69,8 @@ class VoiceTranslatorController:
         self.latency_segment_id = 0
         self.pending_trace_audio_bytes = 0
         self.latency_grace_seconds = 0.65
+        self.rvc_manager: Optional[RvcSidecarManager] = None
+        self._rvc_chunk_bytes = 0
 
     async def run(self) -> None:
         self.loop = asyncio.get_running_loop()
@@ -89,6 +94,14 @@ class VoiceTranslatorController:
 
             cable_candidates = self.resolver.stable_output_candidates(cable_input)
             self.output_sink = self._start_output_with_fallback(cable_candidates)
+
+            if (
+                not self.config.simultaneous_interpretation_enabled
+                and self.config.rvc is not None
+                and self.config.rvc.enabled
+                and self.config.rvc_model is not None
+            ):
+                self._start_rvc()
 
             if self.config.simultaneous_interpretation_enabled:
                 self.engine = self._build_engine()
@@ -122,6 +135,9 @@ class VoiceTranslatorController:
         if self.engine is not None:
             await self.engine.stop()
             self.engine = None
+        if self.rvc_manager is not None:
+            self.rvc_manager.stop()
+            self.rvc_manager = None
         if self.output_sink is not None:
             self.output_sink.stop()
             if self.output_sink.output_path:
@@ -203,9 +219,32 @@ class VoiceTranslatorController:
             resource_id=self.config.resource_id,
         )
 
+    def _start_rvc(self) -> None:
+        rvc_cfg = self.config.rvc
+        if rvc_cfg is None:
+            return
+        manager = RvcSidecarManager(rvc_cfg, on_status=self._emit_status)
+        if not manager.start():
+            self._emit_status("RVC sidecar failed to start; falling back to passthrough")
+            manager.stop()
+            return
+        if self.config.rvc_model is not None:
+            if not manager.apply_model(self.config.rvc_model):
+                self._emit_status("RVC model load failed; falling back to passthrough")
+                manager.stop()
+                return
+        self.rvc_manager = manager
+        self._rvc_chunk_bytes = int(self.config.sample_rate * 2 * 0.5)
+
     def _send_audio_from_callback(self, pcm_bytes: bytes) -> None:
         if not self.config.simultaneous_interpretation_enabled:
-            if self.output_sink is not None:
+            if self.rvc_manager is not None and self.rvc_manager.is_running():
+                out = self.rvc_manager.process_pcm(
+                    pcm_bytes, self.config.sample_rate, self._rvc_chunk_bytes
+                )
+                if out and self.output_sink is not None:
+                    self.output_sink.write(out)
+            elif self.output_sink is not None:
                 self.output_sink.write(pcm_bytes)
             return
         if self.loop is None or self.engine is None:
