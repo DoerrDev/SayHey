@@ -89,6 +89,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (Test-Path dist\sayhey) { Remove-Item -Recurse -Force dist\sayhey }
           Move-Item dist\main.dist dist\sayhey
+          Copy-Item -Recurse -Force resource\python_embed dist\sayhey\resource\python_embed
           Copy-Item tools\updater\build_out\updater.exe dist\sayhey\updater.exe -Force
           if (Test-Path dist\sayhey-windows.zip) { Remove-Item -Force dist\sayhey-windows.zip }
           Add-Type -AssemblyName System.IO.Compression.FileSystem

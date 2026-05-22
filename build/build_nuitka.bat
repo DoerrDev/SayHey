@@ -5,7 +5,6 @@ cd /d "%~dp0.."
 
 set "APP_NAME=sayhey"
 set "DIST_DIR=dist"
-set "RAW_DIST_DIR=%DIST_DIR%\main.dist"
 set "FINAL_DIST_DIR=%DIST_DIR%\%APP_NAME%"
 set "ZIP_PATH=%DIST_DIR%\%APP_NAME%-windows.zip"
 
@@ -18,6 +17,9 @@ if errorlevel 1 (
 )
 
 echo [SayHey] Building SayHey with Nuitka...
+
+if exist "%FINAL_DIST_DIR%" rmdir /s /q "%FINAL_DIST_DIR%"
+if exist "%ZIP_PATH%" del /f /q "%ZIP_PATH%"
 
 python -m nuitka ^
     --mode=standalone ^
@@ -51,9 +53,18 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if exist "%FINAL_DIST_DIR%" rmdir /s /q "%FINAL_DIST_DIR%"
-if exist "%ZIP_PATH%" del /f /q "%ZIP_PATH%"
-if exist "%RAW_DIST_DIR%" ren "%RAW_DIST_DIR%" "%APP_NAME%"
+if exist "%DIST_DIR%\main.dist" (
+    if exist "%FINAL_DIST_DIR%" rmdir /s /q "%FINAL_DIST_DIR%"
+    move /Y "%DIST_DIR%\main.dist" "%FINAL_DIST_DIR%" >nul
+)
+
+echo [SayHey] Copying embedded Python into dist...
+xcopy /E /I /Y /Q "resource\python_embed" "%FINAL_DIST_DIR%\resource\python_embed" >nul
+if errorlevel 1 (
+    echo [SayHey] Copy python_embed FAILED.
+    pause
+    exit /b 1
+)
 
 echo [SayHey] Building updater.exe...
 call "%~dp0..\tools\updater\build_updater.bat"
