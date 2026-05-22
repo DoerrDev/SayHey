@@ -76,10 +76,6 @@ class GameSubtitlePanel(QFrame):
         title_row.addWidget(self._title_label, 1)
         layout.addLayout(title_row)
 
-        self._route_label = QLabel()
-        self._route_label.setObjectName("routeLabel")
-        layout.addWidget(self._route_label)
-
         # Language selectors row
         lang_row = QHBoxLayout()
         lang_row.setSpacing(12)
@@ -148,10 +144,6 @@ class GameSubtitlePanel(QFrame):
     def _on_lang_changed(self) -> None:
         src = self._src_combo.currentData() or "en"
         tgt = self._tgt_combo.currentData() or "zh"
-        src_name = self._src_combo.currentText()
-        tgt_name = self._tgt_combo.currentText()
-
-        self._route_label.setText(f"{src_name}  →  {tgt_name}")
 
         dialect_codes = {code for _, code in HUOSHAN_DIALECTS}
         is_dialect = src in dialect_codes

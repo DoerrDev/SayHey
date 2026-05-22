@@ -22,7 +22,6 @@ _APP_ICON_PATH = Path(__file__).resolve().parent.parent / "resource" / "app-icon
 
 
 class HeaderBar(QWidget):
-    sig_start_all = Signal()
     sig_toggle_overlay = Signal()
     sig_adjust_overlay = Signal(bool)  # True = enter drag mode, False = exit
     sig_open_settings = Signal()
@@ -95,19 +94,7 @@ class HeaderBar(QWidget):
         self._status_label.setVisible(False)
         layout.addWidget(self._status_label)
 
-        # Action buttons
-        self._start_all_btn = QPushButton("一键开始")
-        self._start_all_btn.setFixedWidth(100)
-        self._start_all_btn.clicked.connect(self.sig_start_all.emit)
-        layout.addWidget(self._start_all_btn)
-
-        overlay_btn = QPushButton("悬浮字幕")
-        overlay_btn.setObjectName("secondary")
-        overlay_btn.setFixedWidth(90)
-        overlay_btn.clicked.connect(self.sig_toggle_overlay.emit)
-        layout.addWidget(overlay_btn)
-
-        self._adjust_btn = QPushButton("调整位置")
+        self._adjust_btn = QPushButton("调整字幕位置")
         self._adjust_btn.setObjectName("secondary")
         self._adjust_btn.setFixedWidth(90)
         self._adjust_btn.setCheckable(True)

@@ -9,7 +9,6 @@ from typing import Optional
 _APP_DIR = Path(__file__).resolve().parent.parent
 SETTINGS_PATH = _APP_DIR / "settings.json"
 _ENV_PATH = _APP_DIR / ".env"
-_OPENAI_ENV_PATH = _APP_DIR / "openapi.env"
 
 
 @dataclass
@@ -17,8 +16,6 @@ class AppSettings:
     volc_api_key: str = ""
     volc_resource_id: str = "volc.service_type.10053"
     volc_ws_url: str = "wss://openspeech.bytedance.com/api/v4/ast/v2/translate"
-    openai_api_key: str = ""
-    openai_ws_url: str = "wss://translate.doerr.work/v1/realtime/translations"
     vb_cable_input_name: str = "CABLE Input"
     vb_cable_output_name: str = "CABLE Output"
     translator_engine: str = "huoshan"
@@ -90,14 +87,13 @@ class SettingsStore:
 
     def _bootstrap_from_env(self) -> AppSettings:
         env: dict[str, str] = {}
-        for env_path in (_ENV_PATH, _OPENAI_ENV_PATH):
-            if env_path.exists():
-                for line in env_path.read_text(encoding="utf-8").splitlines():
-                    raw = line.strip()
-                    if not raw or raw.startswith("#") or "=" not in raw:
-                        continue
-                    k, v = raw.split("=", 1)
-                    env[k.strip()] = v.strip().strip('"').strip("'")
+        if _ENV_PATH.exists():
+            for line in _ENV_PATH.read_text(encoding="utf-8").splitlines():
+                raw = line.strip()
+                if not raw or raw.startswith("#") or "=" not in raw:
+                    continue
+                k, v = raw.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
 
         def get(key: str, default: str = "") -> str:
             return env.get(key, default).strip()
@@ -113,8 +109,6 @@ class SettingsStore:
             volc_api_key=get("VOLC_APP_KEY") or get("VOLC_API_KEY"),
             volc_resource_id=get("VOLC_RESOURCE_ID", "volc.service_type.10053"),
             volc_ws_url=get("VOLC_WS_URL", "wss://openspeech.bytedance.com/api/v4/ast/v2/translate"),
-            openai_api_key=get("OPENAI_API_KEY"),
-            openai_ws_url=get("OPENAI_REALTIME_WS_URL", "wss://translate.doerr.work/v1/realtime/translations"),
             vb_cable_input_name=get("VB_CABLE_INPUT_NAME", "CABLE Input"),
             vb_cable_output_name=get("VB_CABLE_OUTPUT_NAME", "CABLE Output"),
             translator_engine=get("TRANSLATOR_ENGINE", "huoshan"),
@@ -139,8 +133,6 @@ class SettingsStore:
             "VOLC_WS_URL": effective_ws_url,
             "VOLC_TRIAL_ENABLED": "1" if use_trial else "",
             "VOLC_TRIAL_API_BASE": s.volc_trial_api_base,
-            "OPENAI_API_KEY": s.openai_api_key,
-            "OPENAI_REALTIME_WS_URL": s.openai_ws_url,
             "VB_CABLE_INPUT_NAME": s.vb_cable_input_name,
             "VB_CABLE_OUTPUT_NAME": s.vb_cable_output_name,
             "TRANSLATOR_ENGINE": s.translator_engine,

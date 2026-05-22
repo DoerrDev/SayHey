@@ -156,8 +156,6 @@ _DEFAULT_VOLC_WS_URL = "wss://openspeech.bytedance.com/api/v4/ast/v2/translate"
 
 def build_game_subtitle_config(env_path: Path) -> GameSubtitleConfig:
     load_env_file(env_path)
-    current_dir = env_path.parent
-    load_env_file(current_dir / "openapi.env")
     api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
     return GameSubtitleConfig(
         ws_url=os.environ.get("VOLC_WS_URL", "").strip() or _DEFAULT_VOLC_WS_URL,

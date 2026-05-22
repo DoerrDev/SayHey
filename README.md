@@ -22,12 +22,6 @@ SayHey 是一个 Windows 桌面实时语音翻译工具，适合游戏语音沟�
 
 ## 引擎说明
 
-### 使用 OpenAI 引擎
-
-- 可以使用同声传译
-- 不能使用游戏字幕
-- 需要你自己准备 OpenAI API Key 和对应服务配置
-
 ### 使用火山引擎
 
 - 可以使用同声传译
@@ -62,7 +56,7 @@ https://console.volcengine.com/speech/new/overview?projectName=default
 - Windows 桌面 GUI
 - 实时麦克风语音翻译
 - 游戏/系统音频悬浮字幕
-- 支持火山引擎和 OpenAI 实时模式
+- 基于火山引擎实时模式
 - 支持运行日志和延迟观察
 - 可保存翻译音频
 
