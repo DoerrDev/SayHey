@@ -142,6 +142,11 @@ class HuoshanS2TSubtitleEngine:
     def _handle_response(self, raw: bytes) -> None:
         response = TranslateResponse()
         response.ParseFromString(raw)
+        try:
+            full = MessageToDict(response, preserving_proto_field_name=True, including_default_value_fields=False)
+            self._emit("status", message=f"[game-raw-response] {full}")
+        except Exception:
+            pass
 
         if response.event == Type.SessionStarted:
             self._emit("status", message=f"[game-s2t-session] started: {self.session_id}")

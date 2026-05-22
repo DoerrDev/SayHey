@@ -82,7 +82,7 @@ class TypedTranslateController:
             return
         self._emit(f"[typed] 翻译开始：{text[:60]}")
         translated = doubao_translate_text(
-            self.cfg.translate, text, self.cfg.source_language, self.cfg.target_language
+            self.cfg.translate, text, self.cfg.source_language, self.cfg.target_language, self._emit
         )
         self._emit(f"[typed] 翻译完成：{translated[:60]}")
         if self.on_result:

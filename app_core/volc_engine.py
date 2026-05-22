@@ -150,6 +150,11 @@ class VolcAstS2SEngine:
     def _handle_response(self, raw: bytes) -> None:
         response = TranslateResponse()
         response.ParseFromString(raw)
+        try:
+            full = MessageToDict(response, preserving_proto_field_name=True, including_default_value_fields=False)
+            self._emit("status", message=f"[raw-response] {full}")
+        except Exception:
+            pass
 
         if response.event == Type.SessionStarted:
             self._emit("status", message=f"[session] started: {self.session_id}")

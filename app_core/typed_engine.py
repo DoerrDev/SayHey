@@ -27,7 +27,7 @@ class DoubaoTranslateConfig:
     timeout: float = 8.0
 
 
-def doubao_translate_text(cfg: DoubaoTranslateConfig, text: str, source_lang: str, target_lang: str) -> str:
+def doubao_translate_text(cfg: DoubaoTranslateConfig, text: str, source_lang: str, target_lang: str, on_status: Optional[Callable[[str], None]] = None) -> str:
     if not cfg.api_key:
         raise RuntimeError("未配置豆包机器翻译 API Key")
 
@@ -46,6 +46,7 @@ def doubao_translate_text(cfg: DoubaoTranslateConfig, text: str, source_lang: st
     req = request.Request(cfg.endpoint or _DOUBAO_MT_URL, data=body, method="POST", headers=headers)
     try:
         with request.urlopen(req, timeout=cfg.timeout) as resp:
+            resp_headers = dict(resp.headers)
             payload = json.loads(resp.read().decode("utf-8"))
     except error.HTTPError as exc:
         detail = _read_http_error_detail(exc)
@@ -55,6 +56,32 @@ def doubao_translate_text(cfg: DoubaoTranslateConfig, text: str, source_lang: st
     except Exception as exc:
         raise RuntimeError(f"豆包机器翻译请求失败：{exc}") from exc
 
+    if on_status:
+        try:
+            on_status(f"[typed-mt-raw] {payload} | headers={resp_headers}")
+        except Exception:
+            pass
+        try:
+            lst = (payload.get("data") or {}).get("translation_list") or []
+            usage = (lst[0] if lst else {}).get("usage") or {}
+            prompt = int(usage.get("prompt_tokens") or 0)
+            completion = int(usage.get("completion_tokens") or 0)
+            if prompt or completion:
+                evt = {
+                    "response_meta": {
+                        "SessionID": resp_headers.get("X-Api-Request-Id", ""),
+                        "Billing": {
+                            "DurationMsec": 0,
+                            "Items": [
+                                {"Unit": "input_text_tokens", "Quantity": prompt},
+                                {"Unit": "output_text_tokens", "Quantity": completion},
+                            ],
+                        },
+                    }
+                }
+                on_status(f"[mt-usage] {evt}")
+        except Exception:
+            pass
     code = payload.get("code")
     if code != 20000000:
         raise RuntimeError(f"豆包机器翻译 API 错误：code={code}, message={payload.get('message')}")
@@ -246,6 +273,22 @@ async def doubao_tts_stream(
         raise RuntimeError("未配置豆包语音合成 API Key")
     connect_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
+    if on_status:
+        try:
+            chars = len(text or "")
+            if chars > 0:
+                evt = {
+                    "response_meta": {
+                        "SessionID": session_id,
+                        "Billing": {
+                            "DurationMsec": 0,
+                            "Items": [{"Unit": "tts_chars", "Quantity": chars}],
+                        },
+                    }
+                }
+                on_status(f"[tts-usage] {evt}")
+        except Exception:
+            pass
     headers = {
         "X-Api-Key": cfg.api_key,
         "X-Api-Resource-Id": cfg.resource_id or _TTS_RESOURCE_ID_DEFAULT,
@@ -311,6 +354,16 @@ async def doubao_tts_stream(
             frame = _parse_frame(raw)
             mt = frame.get("msg_type")
             ev = frame.get("event")
+            if on_status and mt != _MSG_AUDIO_ONLY_SERVER:
+                try:
+                    on_status(f"[typed-tts-raw] msg_type={mt} event={ev} sid={frame.get('session_id')} flags={frame.get('flags')} payload={frame.get('payload')}")
+                except Exception:
+                    pass
+            elif on_status and mt == _MSG_AUDIO_ONLY_SERVER:
+                try:
+                    on_status(f"[typed-tts-raw] msg_type={mt} event={ev} audio_bytes={len(frame.get('payload') or b'')}")
+                except Exception:
+                    pass
             if mt == _MSG_AUDIO_ONLY_SERVER and frame.get("payload"):
                 received_audio = True
                 on_pcm(frame["payload"])

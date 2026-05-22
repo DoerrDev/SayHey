@@ -17,9 +17,10 @@ PRICE_PER_MTOKEN = {
     "input_text_cached_tokens": 5.0,
     "output_audio_tokens": 300.0,
     "output_text_tokens": 30.0,
+    "tts_chars": 300.0,
 }
 
-_USAGE_RE = re.compile(r"\[(?:game-s2t-usage|usage)\]\s*(\{.*\})\s*$")
+_USAGE_RE = re.compile(r"\[(?:game-s2t-usage|usage|mt-usage|tts-usage)\]\s*(\{.*\})\s*$")
 
 
 @dataclass
@@ -65,7 +66,14 @@ def parse_usage_line(line: str) -> Optional[tuple[str, dict]]:
             data = json.loads(payload)
         except Exception:
             return None
-    source = "game" if "game-s2t-usage" in line else "mic"
+    if "game-s2t-usage" in line:
+        source = "game"
+    elif "mt-usage" in line:
+        source = "mt"
+    elif "tts-usage" in line:
+        source = "tts"
+    else:
+        source = "mic"
     return source, data
 
 
