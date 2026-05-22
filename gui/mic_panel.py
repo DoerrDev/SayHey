@@ -55,6 +55,7 @@ class MicTranslatePanel(QFrame):
     sig_voice_warning = Signal(str)
     sig_output_device_changed = Signal()
     sig_speech_rate_changed = Signal(int)
+    sig_simultaneous_changed = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -113,6 +114,7 @@ class MicTranslatePanel(QFrame):
         self._simultaneous_checkbox = QCheckBox("同声传译")
         self._simultaneous_checkbox.setChecked(True)
         self._simultaneous_checkbox.setToolTip("选中：麦克风发送到服务商，转译音频输出到虚拟声卡；取消：麦克风直接输出到虚拟声卡。")
+        self._simultaneous_checkbox.stateChanged.connect(self._on_simultaneous_changed)
         sim_row.addWidget(self._simultaneous_checkbox)
         rate_label = QLabel("语速")
         rate_label.setObjectName("routeLabel")
@@ -167,7 +169,7 @@ class MicTranslatePanel(QFrame):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self._toggle_btn = QPushButton(_icon("mic", color="#0a1218"), " 开始翻译")
+        self._toggle_btn = QPushButton(_icon("mic", color="#0a1218"), " 开启麦克风")
         self._toggle_btn.clicked.connect(self._on_toggle)
         btn_row.addWidget(self._toggle_btn)
 
@@ -324,11 +326,11 @@ class MicTranslatePanel(QFrame):
         self._is_running = running
         if running:
             self._toggle_btn.setIcon(_icon("square", color="#ffffff"))
-            self._toggle_btn.setText(" 停止翻译")
+            self._toggle_btn.setText(" 关闭麦克风")
             self._toggle_btn.setObjectName("danger")
         else:
             self._toggle_btn.setIcon(_icon("mic", color="#0a1218"))
-            self._toggle_btn.setText(" 开始翻译")
+            self._toggle_btn.setText(" 开启麦克风")
             self._toggle_btn.setObjectName("")
         self._toggle_btn.style().polish(self._toggle_btn)
         self._mic_combo.setEnabled(not running)
@@ -361,6 +363,10 @@ class MicTranslatePanel(QFrame):
         self._translation_edit.setPlainText(text)
         sb = self._translation_edit.verticalScrollBar()
         sb.setValue(sb.maximum())
+
+    @Slot(int)
+    def _on_simultaneous_changed(self, state: int) -> None:
+        self.sig_simultaneous_changed.emit(bool(state))
 
     def set_route_text(self, text: str) -> None:
         self._route_label.setText(text)

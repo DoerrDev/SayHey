@@ -67,6 +67,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._store = store
         self._mic_thread: Optional[ControllerThread] = None
+        self._restart_mic_after_stop: bool = False
         self._game_thread: Optional[GameSubtitleThread] = None
         self._overlay_visible = False
         usage_path = _ENV_PATH.parent / "usage_data.json"
@@ -297,6 +298,7 @@ class MainWindow(QMainWindow):
             ("typed_panel", s.typed_hotkey, self._hk_toggle_typed_panel),
             ("subtitle", s.hotkey_subtitle_toggle, self._hk_toggle_subtitle),
             ("si", s.hotkey_si_toggle, self._hk_toggle_si),
+            ("sim_checkbox", s.hotkey_sim_checkbox, self._hk_toggle_sim_checkbox),
             ("subtitle_drag", s.hotkey_subtitle_drag_toggle, self._hk_toggle_subtitle_drag),
             ("typed_tts", s.hotkey_typed_tts_toggle, self._hk_toggle_typed_tts),
         ]
@@ -328,6 +330,16 @@ class MainWindow(QMainWindow):
             self._start_mic()
             if self._mic_thread is not None:
                 show_toast("同声传译已开启")
+
+    def _hk_toggle_sim_checkbox(self) -> None:
+        cb = self._mic_panel._simultaneous_checkbox
+        new_state = not cb.isChecked()
+        cb.setChecked(new_state)
+        running = self._mic_thread is not None and self._mic_thread.isRunning()
+        if running:
+            self._restart_mic_after_stop = True
+            self._stop_mic()
+        show_toast("同声传译已开启" if new_state else "麦克风直连已开启")
 
     def _hk_toggle_subtitle_drag(self) -> None:
         new_state = not self._header._adjust_btn.isChecked()
@@ -456,6 +468,9 @@ class MainWindow(QMainWindow):
         self._mic_thread = None
         self._header.set_status("就绪")
         self._log_panel.append("麦克风翻译已停止")
+        if self._restart_mic_after_stop:
+            self._restart_mic_after_stop = False
+            self._start_mic()
 
     @Slot(str)
     def _on_mic_error(self, msg: str) -> None:
