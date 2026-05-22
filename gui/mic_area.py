@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QTabWidg
 
 from gui.mic_panel import MicTranslatePanel
 from gui.typed_panel import TypedTranslatePanel
+from gui.icons import icon as _icon
 
 
 _VOICE_BTN_TOOLTIP = (
@@ -33,9 +34,9 @@ class MicAreaPanel(QFrame):
         title = QLabel("麦克风区域")
         title.setObjectName("panelTitle")
         head.addWidget(title, 1)
-        self._voice_btn = QPushButton("音色")
+        self._voice_btn = QPushButton(_icon("mic-vocal"), " 音色")
         self._voice_btn.setObjectName("ghost")
-        self._voice_btn.setFixedWidth(72)
+        self._voice_btn.setFixedWidth(86)
         self._voice_btn.setToolTip(_VOICE_BTN_TOOLTIP)
         head.addWidget(self._voice_btn)
         layout.addLayout(head)
@@ -53,7 +54,7 @@ class MicAreaPanel(QFrame):
         self.voice.sig_running_changed.connect(lambda running: self._voice_btn.setEnabled(not running))
 
     def _on_speaker_id_changed(self, speaker_id: str) -> None:
-        self._voice_btn.setText("音色 ✓" if speaker_id else "音色")
+        self._voice_btn.setText(" 音色 ✓" if speaker_id else " 音色")
 
     def select_typed(self) -> None:
         self._tabs.setCurrentIndex(1)

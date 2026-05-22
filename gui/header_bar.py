@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.version import __version__
+from gui.icons import icon as _icon
 
 
 _APP_ICON_PATH = Path(__file__).resolve().parent.parent / "resource" / "app-icon.png"
@@ -94,9 +95,9 @@ class HeaderBar(QWidget):
         self._status_label.setVisible(False)
         layout.addWidget(self._status_label)
 
-        self._adjust_btn = QPushButton("调整字幕位置")
+        self._adjust_btn = QPushButton(_icon("move"), " 调整字幕位置")
         self._adjust_btn.setObjectName("secondary")
-        self._adjust_btn.setFixedWidth(90)
+        self._adjust_btn.setFixedWidth(120)
         self._adjust_btn.setCheckable(True)
         self._adjust_btn.toggled.connect(self.sig_adjust_overlay.emit)
         layout.addWidget(self._adjust_btn)
@@ -109,7 +110,7 @@ class HeaderBar(QWidget):
         layout.addWidget(self._feedback_btn)
 
         settings_btn = QToolButton()
-        settings_btn.setText("⚙")
+        settings_btn.setIcon(_icon("settings"))
         settings_btn.setToolTip("设置")
         settings_btn.clicked.connect(self.sig_open_settings.emit)
         layout.addWidget(settings_btn)

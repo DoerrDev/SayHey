@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from core.settings_store import AppSettings, SettingsStore
+from gui.icons import icon as _icon
 
 
 VOLC_BILLING_DOC_URL = "https://www.volcengine.com/docs/6561/1359370?lang=zh"
@@ -116,11 +117,11 @@ class SettingsDialog(QDialog):
         self._tabs = QTabWidget()
         root.addWidget(self._tabs, 1)
 
-        self._tabs.addTab(self._build_volc_tab(), "🌋 火山引擎")
-        self._tabs.addTab(self._build_billing_tab(), "💰 AI 模型与费用")
-        self._tabs.addTab(self._build_volc_trial_tab(), "🎁 火山引擎试用")
-        self._tabs.addTab(self._build_overlay_tab(), "💬 字幕外观")
-        self._tabs.addTab(self._build_usage_tab(), "📊 用量统计")
+        self._tabs.addTab(self._build_volc_tab(), _icon("mountain"), " 火山引擎")
+        self._tabs.addTab(self._build_billing_tab(), _icon("wallet"), " AI 模型与费用")
+        self._tabs.addTab(self._build_volc_trial_tab(), _icon("gift"), " 火山引擎试用")
+        self._tabs.addTab(self._build_overlay_tab(), _icon("captions"), " 字幕外观")
+        self._tabs.addTab(self._build_usage_tab(), _icon("bar-chart-3"), " 用量统计")
 
         btn_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel

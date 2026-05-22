@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 
 from app_core.audio_devices import AudioDevice, DeviceResolver
 from gui.subtitle_buffer import SubtitleBuffer
+from gui.icons import icon as _icon
 
 HUOSHAN_LANGUAGES = [
     ("Chinese", "zh"),
@@ -120,7 +121,7 @@ class MicTranslatePanel(QFrame):
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self._toggle_btn = QPushButton("▶ 开始翻译")
+        self._toggle_btn = QPushButton(_icon("mic", color="#0a1218"), " 开始翻译")
         self._toggle_btn.clicked.connect(self._on_toggle)
         btn_row.addWidget(self._toggle_btn)
 
@@ -223,10 +224,12 @@ class MicTranslatePanel(QFrame):
     def set_running(self, running: bool) -> None:
         self._is_running = running
         if running:
-            self._toggle_btn.setText("◼ 停止翻译")
+            self._toggle_btn.setIcon(_icon("square", color="#ffffff"))
+            self._toggle_btn.setText(" 停止翻译")
             self._toggle_btn.setObjectName("danger")
         else:
-            self._toggle_btn.setText("▶ 开始翻译")
+            self._toggle_btn.setIcon(_icon("mic", color="#0a1218"))
+            self._toggle_btn.setText(" 开始翻译")
             self._toggle_btn.setObjectName("")
         self._toggle_btn.style().polish(self._toggle_btn)
         self._mic_combo.setEnabled(not running)
