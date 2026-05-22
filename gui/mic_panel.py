@@ -25,33 +25,13 @@ HUOSHAN_LANGUAGES = [
     ("German", "de"),
     ("French", "fr"),
 ]
-OPENAI_LANGUAGES = [
-    ("English", "en"),
-    ("Spanish", "es"),
-    ("French", "fr"),
-    ("German", "de"),
-    ("Italian", "it"),
-    ("Japanese", "ja"),
-    ("Portuguese", "pt"),
-    ("Chinese", "zh"),
-    ("Korean", "ko"),
-    ("Hindi", "hi"),
-    ("Arabic", "ar"),
-    ("Dutch", "nl"),
-    ("Russian", "ru"),
-    ("Polish", "pl"),
-]
-OPENAI_SOURCE_LANGUAGES = [("Auto detect", "auto")]
 LANGUAGES_BY_ENGINE: dict[str, list[tuple[str, str]]] = {
     "huoshan": HUOSHAN_LANGUAGES,
-    "openai": OPENAI_LANGUAGES,
-    "mock": OPENAI_LANGUAGES,
+    "mock": HUOSHAN_LANGUAGES,
 }
 
 
 def _source_langs(engine: str) -> list[tuple[str, str]]:
-    if engine == "openai":
-        return OPENAI_SOURCE_LANGUAGES
     return LANGUAGES_BY_ENGINE.get(engine, HUOSHAN_LANGUAGES)
 
 
@@ -99,7 +79,7 @@ class MicTranslatePanel(QFrame):
 
         # Engine (hidden — kept for state; configure via settings dialog)
         self._engine_combo = QComboBox()
-        self._engine_combo.addItems(["huoshan", "openai", "mock"])
+        self._engine_combo.addItems(["huoshan", "mock"])
         self._engine_combo.currentTextChanged.connect(self._on_engine_changed)
         self._engine_combo.setVisible(False)
 

@@ -118,7 +118,6 @@ class SettingsDialog(QDialog):
 
         self._tabs.addTab(self._build_volc_tab(), "🌋 火山引擎")
         self._tabs.addTab(self._build_billing_tab(), "💰 AI 模型与费用")
-        self._tabs.addTab(self._build_openai_tab(), "✨ OpenAI")
         self._tabs.addTab(self._build_volc_trial_tab(), "🎁 火山引擎试用")
         self._tabs.addTab(self._build_overlay_tab(), "💬 字幕外观")
         self._tabs.addTab(self._build_usage_tab(), "📊 用量统计")
@@ -191,28 +190,6 @@ class SettingsDialog(QDialog):
         layout.addWidget(doubao_note)
 
         layout.addStretch(1)
-        return w
-
-    def _build_openai_tab(self) -> QWidget:
-        w = self._tab_widget()
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 20, 20, 20)
-        form.setSpacing(14)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
-        self._openai_api_key = _password_line()
-        self._openai_api_key.setPlaceholderText("sk-...")
-        form.addRow("API Key", self._openai_api_key)
-
-        self._openai_ws_url = QLineEdit()
-        self._openai_ws_url.setPlaceholderText("wss://translate.doerr.work/v1/realtime/translations")
-        form.addRow("WS URL (Proxy)", self._openai_ws_url)
-
-        note = QLabel("使用代理服务器时填写 WS URL，留空使用默认官方节点。")
-        note.setObjectName("routeLabel")
-        note.setWordWrap(True)
-        form.addRow("", note)
-
         return w
 
     def _build_volc_trial_tab(self) -> QWidget:
@@ -441,9 +418,6 @@ class SettingsDialog(QDialog):
         self._volc_resource_id.setText(s.volc_resource_id)
         self._volc_ws_url.setText(s.volc_ws_url)
 
-        self._openai_api_key.setText(s.openai_api_key)
-        self._openai_ws_url.setText(s.openai_ws_url)
-
         self._overlay_max_lines.setValue(s.overlay_max_lines)
         self._overlay_font_size.setValue(s.overlay_font_size)
         self._overlay_opacity.setValue(int(s.overlay_opacity * 100))
@@ -473,8 +447,6 @@ class SettingsDialog(QDialog):
             volc_api_key=self._volc_api_key.text().strip(),
             volc_resource_id=self._volc_resource_id.text().strip() or s.volc_resource_id,
             volc_ws_url=self._volc_ws_url.text().strip() or s.volc_ws_url,
-            openai_api_key=self._openai_api_key.text().strip(),
-            openai_ws_url=self._openai_ws_url.text().strip() or s.openai_ws_url,
             overlay_max_lines=self._overlay_max_lines.value(),
             overlay_font_size=self._overlay_font_size.value(),
             overlay_opacity=self._overlay_opacity.value() / 100.0,

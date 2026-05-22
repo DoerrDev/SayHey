@@ -11,7 +11,6 @@ from typing import Callable, Optional
 from app_core.audio_devices import AudioDevice, DeviceResolver
 from app_core.audio_io import AudioInputSource, AudioOutputSink, AudioRouteConfig
 from app_core.mock_engine import MockTranslatorEngine
-from app_core.openai_engine import OpenAIRealtimeTranslateEngine
 from app_core.translator import TranslatorConfig, TranslatorEvent
 from app_core.volc_engine import VolcAstS2SEngine
 
@@ -35,9 +34,6 @@ class AppConfig:
     sample_rate: int = 16000
     output_channels: int = 2
     engine_name: str = "huoshan"
-    openai_api_key: str = ""
-    openai_ws_url: str = "wss://translate.doerr.work/v1/realtime/translations"
-    openai_model: str = "gpt-realtime-translate"
 
 
 class VoiceTranslatorController:
@@ -193,12 +189,6 @@ class VoiceTranslatorController:
     def _build_engine(self):
         if self.config.engine_name == "mock":
             return MockTranslatorEngine()
-        if self.config.engine_name == "openai":
-            return OpenAIRealtimeTranslateEngine(
-                api_key=self.config.openai_api_key,
-                ws_url=self.config.openai_ws_url,
-                model=self.config.openai_model,
-            )
         return VolcAstS2SEngine(
             ws_url=self.config.ws_url,
             api_key=self.config.api_key,
@@ -298,19 +288,12 @@ def _env_int(name: str, default: Optional[int] = None) -> Optional[int]:
 
 def build_app_config(env_path: Path) -> AppConfig:
     load_env_file(env_path)
-    load_env_file(env_path.with_name("openapi.env"))
     current_dir = env_path.parent
     api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
     engine_name = os.environ.get("TRANSLATOR_ENGINE", "huoshan").strip().lower()
     if engine_name == "volc":
         engine_name = "huoshan"
-    sample_rate = int(os.environ.get("S2S_SAMPLE_RATE", "24000" if engine_name == "openai" else "16000").strip())
-    proxy_host = os.environ.get("PROXY_HOST", "").strip()
-    default_openai_ws_url = (
-        f"wss://{proxy_host}/v1/realtime/translations"
-        if proxy_host
-        else "wss://translate.doerr.work/v1/realtime/translations"
-    )
+    sample_rate = int(os.environ.get("S2S_SAMPLE_RATE", "16000").strip())
     return AppConfig(
         ws_url=os.environ.get("VOLC_WS_URL", "").strip(),
         api_key=api_key,
@@ -329,14 +312,8 @@ def build_app_config(env_path: Path) -> AppConfig:
         translated_record_dir=current_dir / os.environ.get("S2S_RECORD_DIR", "recordings_s2s").strip(),
         speaker_id=os.environ.get("S2S_SPEAKER_ID", "").strip() or None,
         speech_rate=int(os.environ.get("S2S_SPEECH_RATE", "0").strip()),
-        chunk_ms=int(os.environ.get("CHUNK_MS", "40" if engine_name == "openai" else "80").strip()),
+        chunk_ms=int(os.environ.get("CHUNK_MS", "80").strip()),
         sample_rate=sample_rate,
         output_channels=int(os.environ.get("VB_CABLE_OUTPUT_CHANNELS", "2").strip()),
         engine_name=engine_name,
-        openai_api_key=os.environ.get("OPENAI_API_KEY", "").strip(),
-        openai_ws_url=os.environ.get(
-            "OPENAI_REALTIME_WS_URL",
-            default_openai_ws_url,
-        ).strip(),
-        openai_model=os.environ.get("OPENAI_REALTIME_MODEL", "gpt-realtime-translate").strip(),
     )

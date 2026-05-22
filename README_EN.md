@@ -23,12 +23,6 @@ If you just want to try it:
 
 ## Engine Notes
 
-### OpenAI engine
-
-- Supports live interpretation
-- Does not support game subtitles
-- Requires your own OpenAI API key and service configuration
-
 ### Volcengine engine
 
 - Supports live interpretation

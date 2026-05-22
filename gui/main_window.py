@@ -164,7 +164,6 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         # Header actions
-        self._header.sig_start_all.connect(self._start_all)
         self._header.sig_toggle_overlay.connect(self._toggle_overlay)
         self._header.sig_adjust_overlay.connect(self._overlay.set_drag_mode)
         self._header.sig_open_settings.connect(self._open_settings)
@@ -362,12 +361,6 @@ class MainWindow(QMainWindow):
         self._apply_hotkey(s.typed_hotkey)
 
     @Slot()
-    def _start_all(self) -> None:
-        self._usage_tracker.reset_session()
-        self._start_mic()
-        self._start_game()
-
-    @Slot()
     def _start_mic(self) -> None:
         if self._mic_thread is not None and self._mic_thread.isRunning():
             return
@@ -393,11 +386,6 @@ class MainWindow(QMainWindow):
                     "未检测到火山引擎 App Key。\n\n"
                     "请点击右上角齿轮图标 → 火山引擎选项卡，填写 App Key 后保存。"
                 )
-            if engine == "openai" and not config.openai_api_key:
-                raise RuntimeError(
-                    "未检测到 OpenAI API Key。\n\n"
-                    "请点击右上角齿轮图标 → OpenAI 选项卡，填写 API Key 后保存。"
-                )
             config.audio_route = replace(
                 config.audio_route,
                 input_device_index=device.index,
@@ -406,7 +394,7 @@ class MainWindow(QMainWindow):
             config.engine_name = engine
             config.source_language = src_lang
             config.target_language = tgt_lang
-            config.speaker_id = speaker_id if engine == "huoshan" else None
+            config.speaker_id = speaker_id
             self._store.save(
                 replace(
                     self._store.get(),
@@ -417,9 +405,6 @@ class MainWindow(QMainWindow):
                     s2s_speaker_id=speaker_id,
                 )
             )
-            if engine == "openai":
-                config.sample_rate = 24000
-                config.chunk_ms = 40
         except Exception as exc:
             QMessageBox.critical(self, "配置错误", str(exc))
             return
@@ -479,6 +464,8 @@ class MainWindow(QMainWindow):
 
         self._game_panel.set_running(True)
         self._header.set_status("游戏字幕启动中...", "warn")
+        if not self._overlay.isVisible():
+            self._toggle_overlay()
 
         self._game_thread = GameSubtitleThread(config, parent=self)
         self._game_thread.sig_status.connect(self.sig_status)
@@ -497,6 +484,9 @@ class MainWindow(QMainWindow):
         self._game_panel.set_running(False)
         self._game_thread = None
         self._log_panel.append("游戏字幕已停止")
+        if self._overlay.isVisible():
+            self._overlay.hide()
+            self._overlay_visible = False
 
     @Slot(str)
     def _on_game_error(self, msg: str) -> None:
