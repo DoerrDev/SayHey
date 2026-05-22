@@ -23,5 +23,21 @@ def _render(name: str, color: str, size: int) -> QPixmap:
     return pm
 
 
+def resource_pixmap(name: str, width: int, height: int, color: str = BRAND) -> QPixmap:
+    path = _ICON_DIR / f"{name}.svg"
+    data = path.read_bytes().replace(b"currentColor", color.encode())
+    renderer = QSvgRenderer(QByteArray(data))
+    pm = QPixmap(width, height)
+    pm.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pm)
+    renderer.render(painter)
+    painter.end()
+    return pm
+
+
+def icon_path(name: str) -> Path:
+    return _ICON_DIR / f"{name}.svg"
+
+
 def icon(name: str, color: str = BRAND, size: int = 20) -> QIcon:
     return QIcon(_render(name, color, size))
