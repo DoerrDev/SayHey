@@ -163,6 +163,22 @@ class SettingsDialog(QDialog):
         self._volc_ws_url.setPlaceholderText("wss://openspeech.bytedance.com/api/v4/ast/v2/translate")
         form.addRow("WS URL", self._volc_ws_url)
 
+        speech_rate_row = QHBoxLayout()
+        self._s2s_speech_rate = QSlider(Qt.Orientation.Horizontal)
+        self._s2s_speech_rate.setRange(-50, 100)
+        self._s2s_speech_rate.valueChanged.connect(self._update_speech_rate_label)
+        self._s2s_speech_rate_label = QLabel("0")
+        self._s2s_speech_rate_label.setMinimumWidth(48)
+        self._s2s_speech_rate_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        speech_rate_row.addWidget(self._s2s_speech_rate, 1)
+        speech_rate_row.addWidget(self._s2s_speech_rate_label)
+        form.addRow("同声传译语速", speech_rate_row)
+
+        speech_rate_tip = QLabel("范围：-50 到 100。0 是默认语速，负数更慢，正数更快。")
+        speech_rate_tip.setObjectName("routeLabel")
+        speech_rate_tip.setWordWrap(True)
+        form.addRow("", speech_rate_tip)
+
         permission_note = QLabel(
             "同一个 Key 需要开通这些资源权限：语音同传 volc.service_type.10053、"
             "机器翻译模型 volc.speech.mt、语音合成 2.0 seed-tts-2.0。"
@@ -419,6 +435,7 @@ class SettingsDialog(QDialog):
         self._volc_api_key.setText(s.volc_api_key)
         self._volc_resource_id.setText(s.volc_resource_id)
         self._volc_ws_url.setText(s.volc_ws_url)
+        self._s2s_speech_rate.setValue(s.s2s_speech_rate)
 
         self._overlay_max_lines.setValue(s.overlay_max_lines)
         self._overlay_font_size.setValue(s.overlay_font_size)
@@ -449,6 +466,7 @@ class SettingsDialog(QDialog):
             volc_api_key=self._volc_api_key.text().strip(),
             volc_resource_id=self._volc_resource_id.text().strip() or s.volc_resource_id,
             volc_ws_url=self._volc_ws_url.text().strip() or s.volc_ws_url,
+            s2s_speech_rate=self._s2s_speech_rate.value(),
             overlay_max_lines=self._overlay_max_lines.value(),
             overlay_font_size=self._overlay_font_size.value(),
             overlay_opacity=self._overlay_opacity.value() / 100.0,
@@ -482,3 +500,9 @@ class SettingsDialog(QDialog):
         self.settings_saved.emit(settings)
         QMessageBox.information(self, "已保存", "设置已保存 ✓")
         self.accept()
+
+    def _update_speech_rate_label(self, value: int) -> None:
+        if value > 0:
+            self._s2s_speech_rate_label.setText(f"+{value}")
+        else:
+            self._s2s_speech_rate_label.setText(str(value))
