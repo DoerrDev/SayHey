@@ -10,7 +10,6 @@ Endpoints consumed by RvcClient in app_core/rvc_client.py:
 from __future__ import annotations
 
 import argparse
-import io
 import os
 import struct
 import tempfile
@@ -127,7 +126,7 @@ async def infer(request: Request):
 
     try:
         _rvc.infer_file(input_path, output_path)
-        out_pcm = _read_wav_pcm(output_path)
+        out_pcm = _read_wav_pcm_resampled(output_path, sample_rate)
     except Exception:
         out_pcm = pcm_bytes
     finally:
@@ -165,17 +164,21 @@ def _write_wav(f, pcm_bytes: bytes, sample_rate: int, channels: int, sampwidth: 
     f.write(pcm_bytes)
 
 
-def _read_wav_pcm(path: str) -> bytes:
-    """Read raw PCM data from a WAV file, stripping the header."""
-    with open(path, "rb") as f:
-        data = f.read()
-    # Find "data" chunk
-    idx = data.find(b"data")
-    if idx == -1:
-        return data
-    # 4 bytes tag + 4 bytes size = 8
-    chunk_size = struct.unpack("<I", data[idx + 4: idx + 8])[0]
-    return data[idx + 8: idx + 8 + chunk_size]
+def _read_wav_pcm_resampled(path: str, target_sr: int) -> bytes:
+    """Read WAV, resample to target_sr if needed, return int16 PCM bytes."""
+    import numpy as np
+    import soundfile as sf
+
+    data, file_sr = sf.read(path, dtype="int16", always_2d=False)
+    if file_sr != target_sr:
+        # Linear interpolation resample (good enough for voice, no extra deps)
+        n_out = int(round(len(data) * target_sr / file_sr))
+        data = np.interp(
+            np.linspace(0, len(data) - 1, n_out),
+            np.arange(len(data)),
+            data.astype(np.float32),
+        ).astype(np.int16)
+    return data.tobytes()
 
 
 def _safe_remove(path: str) -> None:
