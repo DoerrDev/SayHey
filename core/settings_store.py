@@ -53,6 +53,7 @@ class AppSettings:
     typed_hotkey: str = "ctrl+alt+t"
     hotkey_subtitle_toggle: str = ""
     hotkey_si_toggle: str = ""
+    hotkey_sim_checkbox: str = ""
     hotkey_subtitle_drag_toggle: str = ""
     hotkey_typed_tts_toggle: str = ""
 

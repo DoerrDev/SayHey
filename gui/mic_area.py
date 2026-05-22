@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QTabWidget, QVBoxLayout
 
 from gui.mic_panel import MicTranslatePanel
@@ -52,9 +52,19 @@ class MicAreaPanel(QFrame):
         self._voice_btn.clicked.connect(self.voice.sig_select_voice.emit)
         self.voice.sig_speaker_id_changed.connect(self._on_speaker_id_changed)
         self.voice.sig_running_changed.connect(lambda running: self._voice_btn.setEnabled(not running))
+        self.voice.sig_simultaneous_changed.connect(self._on_simultaneous_changed)
 
     def _on_speaker_id_changed(self, speaker_id: str) -> None:
         self._voice_btn.setText(" 音色")
+
+    @Slot(bool)
+    def _on_simultaneous_changed(self, enabled: bool) -> None:
+        if enabled:
+            self._tabs.setTabText(0, "同声传译")
+            self._tabs.setTabToolTip(0, "")
+        else:
+            self._tabs.setTabText(0, "麦克风直连")
+            self._tabs.setTabToolTip(0, "说话直接发送出去")
 
     def select_typed(self) -> None:
         self._tabs.setCurrentIndex(1)
