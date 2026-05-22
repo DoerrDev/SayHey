@@ -30,6 +30,7 @@ class AppConfig:
     translated_record_dir: Path
     speaker_id: Optional[str]
     speech_rate: int
+    simultaneous_interpretation_enabled: bool = True
     chunk_ms: int = 80
     sample_rate: int = 16000
     output_channels: int = 2
@@ -85,17 +86,20 @@ class VoiceTranslatorController:
             cable_candidates = self.resolver.stable_output_candidates(cable_input)
             self.output_sink = self._start_output_with_fallback(cable_candidates)
 
-            self.engine = self._build_engine()
-            await self.engine.start(
-                TranslatorConfig(
-                    source_language=self.config.source_language,
-                    target_language=self.config.target_language,
-                    sample_rate=self.config.sample_rate,
-                    speaker_id=self.config.speaker_id,
-                    speech_rate=self.config.speech_rate,
-                ),
-                self._handle_engine_event,
-            )
+            if self.config.simultaneous_interpretation_enabled:
+                self.engine = self._build_engine()
+                await self.engine.start(
+                    TranslatorConfig(
+                        source_language=self.config.source_language,
+                        target_language=self.config.target_language,
+                        sample_rate=self.config.sample_rate,
+                        speaker_id=self.config.speaker_id,
+                        speech_rate=self.config.speech_rate,
+                    ),
+                    self._handle_engine_event,
+                )
+            else:
+                self._emit_status("Microphone passthrough active: service translation disabled")
 
             self._start_input_with_fallback(mic_candidates)
 
@@ -196,6 +200,10 @@ class VoiceTranslatorController:
         )
 
     def _send_audio_from_callback(self, pcm_bytes: bytes) -> None:
+        if not self.config.simultaneous_interpretation_enabled:
+            if self.output_sink is not None:
+                self.output_sink.write(pcm_bytes)
+            return
         if self.loop is None or self.engine is None:
             return
         if self.loop.is_closed():
@@ -312,6 +320,10 @@ def build_app_config(env_path: Path) -> AppConfig:
         translated_record_dir=current_dir / os.environ.get("S2S_RECORD_DIR", "recordings_s2s").strip(),
         speaker_id=os.environ.get("S2S_SPEAKER_ID", "").strip() or None,
         speech_rate=int(os.environ.get("S2S_SPEECH_RATE", "0").strip()),
+        simultaneous_interpretation_enabled=os.environ.get(
+            "MIC_SIMULTANEOUS_INTERPRETATION",
+            "1",
+        ).strip() not in {"0", "false", "False"},
         chunk_ms=int(os.environ.get("CHUNK_MS", "80").strip()),
         sample_rate=sample_rate,
         output_channels=int(os.environ.get("VB_CABLE_OUTPUT_CHANNELS", "2").strip()),

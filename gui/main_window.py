@@ -352,6 +352,7 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_source_language(s.s2s_source_language)
         self._mic_panel.set_target_language(s.s2s_target_language)
         self._mic_panel.set_speaker_id(s.s2s_speaker_id)
+        self._mic_panel.set_simultaneous_interpretation_enabled(s.mic_simultaneous_interpretation_enabled)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
         self._game_panel.set_audio_devices(_list_speaker_names(), s.game_audio_device_name)
@@ -387,14 +388,15 @@ class MainWindow(QMainWindow):
         src_lang = self._mic_panel.selected_source_language()
         tgt_lang = self._mic_panel.selected_target_language()
         speaker_id = self._mic_panel.selected_speaker_id()
+        simultaneous_enabled = self._mic_panel.simultaneous_interpretation_enabled()
 
-        if src_lang == tgt_lang and src_lang != "auto":
+        if simultaneous_enabled and src_lang == tgt_lang and src_lang != "auto":
             QMessageBox.warning(self, "语言设置", "源语言和目标语言不能相同")
             return
 
         try:
             config = build_app_config(_ENV_PATH)
-            if engine == "huoshan" and not config.api_key:
+            if simultaneous_enabled and engine == "huoshan" and not config.api_key:
                 raise RuntimeError(
                     "未检测到火山引擎 App Key。\n\n"
                     "请点击右上角齿轮图标 → 火山引擎选项卡，填写 App Key 后保存。"
@@ -408,6 +410,7 @@ class MainWindow(QMainWindow):
             config.source_language = src_lang
             config.target_language = tgt_lang
             config.speaker_id = speaker_id
+            config.simultaneous_interpretation_enabled = simultaneous_enabled
             self._store.save(
                 replace(
                     self._store.get(),
@@ -416,6 +419,7 @@ class MainWindow(QMainWindow):
                     s2s_source_language=src_lang,
                     s2s_target_language=tgt_lang,
                     s2s_speaker_id=speaker_id,
+                    mic_simultaneous_interpretation_enabled=simultaneous_enabled,
                 )
             )
         except Exception as exc:
