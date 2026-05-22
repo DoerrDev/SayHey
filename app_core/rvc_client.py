@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import socket
 import subprocess
 import sys
@@ -104,12 +105,16 @@ def install_sidecar(on_line: Optional[Callable[[str], None]] = None, cancel_chec
         py_str = str(py)
         emit(f"using embedded python: {py_str}")
 
-    def run(args: list[str]) -> bool:
+    def run(args: list[str], env: Optional[dict[str, str]] = None) -> bool:
         if cancel_check and cancel_check():
             return False
         emit(f"$ {' '.join(args)}")
+        proc_env = os.environ.copy()
+        if env:
+            proc_env.update(env)
         proc = subprocess.Popen(
             args,
+            env=proc_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=1,
@@ -133,7 +138,10 @@ def install_sidecar(on_line: Optional[Callable[[str], None]] = None, cancel_chec
             return False
         return True
 
-    if not run([py_str, "-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools"]):
+    if not run([py_str, "-m", "pip", "install", "--upgrade", "pip<24.1", "wheel", "setuptools"]):
+        return False
+
+    if not run([py_str, "-m", "pip", "install", "numpy==1.23.5", "Cython<3"]):
         return False
 
     if _has_cuda():
@@ -147,7 +155,17 @@ def install_sidecar(on_line: Optional[Callable[[str], None]] = None, cancel_chec
     if not ok:
         return False
 
-    if not run([py_str, "-m", "pip", "install", "numpy", "rvc-python"]):
+    if not run([py_str, "-m", "pip", "install", "--no-build-isolation", "fairseq==0.12.2"], env={"READTHEDOCS": "1"}):
+        return False
+
+    if not run([py_str, "-m", "pip", "install",
+                "av", "faiss-cpu==1.7.3", "fastapi", "ffmpeg-python", "loguru",
+                "omegaconf==2.0.6", "praat-parselmouth", "pydantic",
+                "python-multipart", "pyworld", "requests", "soundfile",
+                "torchcrepe", "uvicorn"]):
+        return False
+
+    if not run([py_str, "-m", "pip", "install", "--no-deps", "rvc-python==0.1.5"]):
         return False
 
     emit("install complete.")
@@ -302,14 +320,20 @@ class RvcSidecarManager:
         self,
         config: RvcConfig,
         on_status: Optional[Callable[[str], None]] = None,
+        on_output: Optional[Callable[[bytes], None]] = None,
     ) -> None:
         self.config = config
         self.on_status = on_status
+        self.on_output = on_output
         self.process: Optional[subprocess.Popen] = None
         self.client: Optional[RvcClient] = None
         self._buf_lock = threading.Lock()
         self._pcm_buf = bytearray()
         self._chunk_target = 0
+        # worker thread for async inference
+        self._infer_queue: queue.Queue = queue.Queue(maxsize=4)
+        self._worker_thread: Optional[threading.Thread] = None
+        self._worker_running = False
 
     def _emit(self, msg: str) -> None:
         if self.on_status:
@@ -348,9 +372,16 @@ class RvcSidecarManager:
         info = self.client.health()
         if info:
             self._emit(f"ready device={info.get('device')} rvc_available={info.get('rvc_available')}")
+        self._worker_running = True
+        self._worker_thread = threading.Thread(target=self._run_worker, daemon=True)
+        self._worker_thread.start()
         return True
 
     def stop(self) -> None:
+        self._worker_running = False
+        if self._worker_thread is not None:
+            self._worker_thread.join(timeout=2.0)
+            self._worker_thread = None
         if self.process is not None:
             try:
                 self.process.terminate()
@@ -377,6 +408,18 @@ class RvcSidecarManager:
         except Exception:
             pass
 
+    def _run_worker(self) -> None:
+        while self._worker_running:
+            try:
+                chunk, sample_rate = self._infer_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            if self.client is None:
+                continue
+            out = self.client.infer(chunk, sample_rate)
+            if out and self.on_output:
+                self.on_output(out)
+
     def apply_model(self, model: Optional[RvcModel]) -> bool:
         if not self.is_running() or self.client is None or model is None:
             return False
@@ -386,15 +429,26 @@ class RvcSidecarManager:
         if self.client is not None:
             self.client.set_params(pitch=self.config.pitch, index_rate=self.config.index_rate)
 
-    def process_pcm(self, pcm_bytes: bytes, sample_rate: int, min_chunk_bytes: int = 0) -> bytes:
+    def process_pcm(self, pcm_bytes: bytes, sample_rate: int, min_chunk_bytes: int = 0) -> None:
         if not self.config.enabled or self.client is None or not self.is_running():
-            return pcm_bytes
-        if min_chunk_bytes <= 0:
-            return self.client.infer(pcm_bytes, sample_rate)
+            if self.on_output:
+                self.on_output(pcm_bytes)
+            return
         with self._buf_lock:
             self._pcm_buf.extend(pcm_bytes)
-            if len(self._pcm_buf) < min_chunk_bytes:
-                return b""
+            if len(self._pcm_buf) < max(min_chunk_bytes, 1):
+                return
             chunk = bytes(self._pcm_buf)
             self._pcm_buf.clear()
-        return self.client.infer(chunk, sample_rate)
+        try:
+            self._infer_queue.put_nowait((chunk, sample_rate))
+        except queue.Full:
+            # inference can't keep up; drop oldest, enqueue latest
+            try:
+                self._infer_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._infer_queue.put_nowait((chunk, sample_rate))
+            except queue.Full:
+                pass
