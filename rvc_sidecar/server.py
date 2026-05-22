@@ -24,7 +24,7 @@ _rvc = None          # RVCInference instance, created lazily on first load
 _device = "cpu:0"
 _pitch = 0
 _index_rate = 0.5
-_F0_METHOD = "rmvpe"  # harvest=high quality but slow; rmvpe=fast+good; pm=fastest
+_F0_METHOD = "rmvpe"  # overridden by --f0-method at startup
 
 
 def _resolve_device(raw: str) -> str:
@@ -194,14 +194,16 @@ def _safe_remove(path: str) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    global _device
+    global _device, _F0_METHOD
 
     parser = argparse.ArgumentParser(description="RVC sidecar server")
     parser.add_argument("--port", type=int, default=7861)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--f0-method", type=str, default="rmvpe", choices=["pm", "harvest", "rmvpe"])
     args = parser.parse_args()
 
     _device = _resolve_device(args.device)
+    _F0_METHOD = args.f0_method
 
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
 

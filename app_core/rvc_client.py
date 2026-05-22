@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import threading
+import textwrap
 import time
 import urllib.error
 import urllib.request
@@ -167,6 +168,20 @@ def install_sidecar(on_line: Optional[Callable[[str], None]] = None, cancel_chec
 
     if not run([py_str, "-m", "pip", "install", "--no-deps", "rvc-python==0.1.5"]):
         return False
+
+    emit("Pre-downloading RVC base models (hubert_base.pt, rmvpe.pt)...")
+    download_script = textwrap.dedent("""
+        from rvc_python.download_model import download_rvc_models
+        import os, sys
+        lib_dir = os.path.join(
+            os.path.dirname(sys.executable),
+            "Lib", "site-packages", "rvc_python"
+        )
+        download_rvc_models(lib_dir)
+        print("models ready.")
+    """)
+    if not run([py_str, "-c", download_script]):
+        emit("WARN: model pre-download failed; will retry on first use.")
 
     emit("install complete.")
     return True
@@ -351,7 +366,10 @@ class RvcSidecarManager:
         if not py:
             self._emit("no Python interpreter available for sidecar (embedded missing)")
             return False
-        args = [py, str(sidecar_script_path()), "--port", str(port), "--device", self.config.device]
+        args = [
+            py, str(sidecar_script_path()), "--port", str(port),
+            "--device", self.config.device, "--f0-method", "rmvpe",
+        ]
         try:
             self.process = subprocess.Popen(
                 args,
