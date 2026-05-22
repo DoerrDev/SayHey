@@ -23,6 +23,12 @@ from PySide6.QtWidgets import (
 _VOICE_DATA_PATH = Path(__file__).resolve().parent.parent / "resource" / "volc_voice_list.json"
 _SECTION_ORDER = ["s2s", "tts20", "tts10"]
 
+_SECTION_TOOLTIPS = {
+    "tts20": "豆包语音合成 2.0\n打字翻译 TTS 推荐使用：音色池最丰富，质量稳定。",
+    "s2s": "端到端实时语音大模型 / SC-2.0\n同声传译推荐使用：低延迟、贴近自然对话。",
+    "tts10": "豆包语音合成 1.0\n兼容旧音色，作为降级备选；如 2.0 没有匹配音色再选它。",
+}
+
 
 @dataclass(frozen=True)
 class VoiceItem:
@@ -200,6 +206,7 @@ class VoiceSelectorDialog(QDialog):
         for section_id in ["tts20", "s2s", "tts10"]:
             button = QPushButton(_section_label(section_id, counts.get(section_id, 0)))
             button.setObjectName("voiceFilterButton")
+            button.setToolTip(_SECTION_TOOLTIPS.get(section_id, ""))
             button.clicked.connect(lambda _checked=False, sid=section_id: self._set_active_section(sid))
             self._section_buttons[section_id] = button
             toolbar.addWidget(button)

@@ -64,6 +64,8 @@ class MicTranslatePanel(QFrame):
     sig_stop_requested = Signal()
     sig_test_cable = Signal()
     sig_select_voice = Signal()
+    sig_speaker_id_changed = Signal(str)
+    sig_running_changed = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -81,16 +83,6 @@ class MicTranslatePanel(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(10)
-
-        # Voice button row (title moved to MicAreaPanel)
-        title_row = QHBoxLayout()
-        title_row.addStretch(1)
-        self._voice_btn = QPushButton("音色")
-        self._voice_btn.setObjectName("ghost")
-        self._voice_btn.setFixedWidth(72)
-        self._voice_btn.clicked.connect(self.sig_select_voice.emit)
-        title_row.addWidget(self._voice_btn)
-        layout.addLayout(title_row)
 
         # Mic device row (no label prefix)
         mic_row = QHBoxLayout()
@@ -239,7 +231,7 @@ class MicTranslatePanel(QFrame):
 
     def set_speaker_id(self, speaker_id: str) -> None:
         self._speaker_id = speaker_id.strip()
-        self._voice_btn.setText("音色 ✓" if self._speaker_id else "音色")
+        self.sig_speaker_id_changed.emit(self._speaker_id)
 
     @Slot()
     def _on_toggle(self) -> None:
@@ -261,7 +253,7 @@ class MicTranslatePanel(QFrame):
         self._engine_combo.setEnabled(not running)
         self._src_lang_combo.setEnabled(not running)
         self._tgt_lang_combo.setEnabled(not running)
-        self._voice_btn.setEnabled(not running)
+        self.sig_running_changed.emit(running)
         if not running:
             self._source_buffer.reset()
             self._translation_buffer.reset()
