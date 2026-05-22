@@ -33,6 +33,10 @@ jobs:
         shell: cmd
         run: python scripts\stamp_version.py %GITHUB_REF_NAME%
 
+      - name: Fetch embedded Python (for RVC sidecar)
+        shell: cmd
+        run: python scripts\fetch_python_embed.py
+
       - name: Build SayHey main
         shell: cmd
         run: |
@@ -48,6 +52,7 @@ jobs:
             --include-package=core ^
             --include-package=python_protogen ^
             --include-data-dir=resource=resource ^
+            --include-data-dir=rvc_sidecar=rvc_sidecar ^
             --include-module=sounddevice ^
             --include-module=soundcard ^
             --include-package-data=soundcard ^
