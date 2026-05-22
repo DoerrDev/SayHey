@@ -41,7 +41,6 @@ class _EnterTextEdit(QPlainTextEdit):
 class TypedTranslatePanel(QFrame):
     sig_translate_requested = Signal(str)
     sig_settings_changed = Signal()
-    sig_rebind_hotkey = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -114,20 +113,6 @@ class TypedTranslatePanel(QFrame):
         result_row.addWidget(self._wrap_result("译文", self._target_lbl), 1)
         layout.addLayout(result_row)
 
-        # Hotkey row
-        hk_row = QHBoxLayout()
-        hk_row.setSpacing(8)
-        self._hotkey_lbl = QLabel("Ctrl + Alt + T")
-        self._hotkey_lbl.setObjectName("hotkeyBox")
-        self._hotkey_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._hotkey_lbl.setMinimumHeight(32)
-        hk_row.addWidget(self._hotkey_lbl, 1)
-        rebind = QPushButton("重新绑定热键")
-        rebind.setObjectName("ghost")
-        rebind.clicked.connect(self.sig_rebind_hotkey.emit)
-        hk_row.addWidget(rebind)
-        layout.addLayout(hk_row)
-
         self._src.currentIndexChanged.connect(lambda *_: self.sig_settings_changed.emit())
         self._tgt.currentIndexChanged.connect(lambda *_: self.sig_settings_changed.emit())
         self._auto_tts.toggled.connect(lambda *_: self.sig_settings_changed.emit())
@@ -172,9 +157,6 @@ class TypedTranslatePanel(QFrame):
 
     def set_auto_tts(self, on: bool) -> None:
         self._auto_tts.setChecked(on)
-
-    def set_hotkey_label(self, text: str) -> None:
-        self._hotkey_lbl.setText(text)
 
     def show_result(self, source: str, translated: str) -> None:
         self._source_lbl.setText(source)

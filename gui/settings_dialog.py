@@ -25,7 +25,86 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 from core.settings_store import AppSettings, SettingsStore
+from core.hotkey import format_hotkey
 from gui.icons import icon as _icon
+
+
+class _HotkeyCaptureEdit(QPushButton):
+    """Click to capture, then press a combo. Empty = unbound."""
+
+    def __init__(self, combo: str = "", parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("secondary")
+        self._combo = combo or ""
+        self._capturing = False
+        self._refresh()
+        self.clicked.connect(self._start_capture)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def combo(self) -> str:
+        return self._combo
+
+    def set_combo(self, combo: str) -> None:
+        self._combo = combo or ""
+        self._capturing = False
+        self._refresh()
+
+    def _refresh(self) -> None:
+        if self._capturing:
+            self.setText("请按组合键…  (Esc 取消, Backspace 清除)")
+        else:
+            self.setText(format_hotkey(self._combo) if self._combo else "未绑定（点击设置）")
+
+    def _start_capture(self) -> None:
+        self._capturing = True
+        self._refresh()
+        self.setFocus()
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        if not self._capturing:
+            return super().keyPressEvent(event)
+        k = event.key()
+        if k == Qt.Key.Key_Escape:
+            self._capturing = False
+            self._refresh()
+            return
+        if k == Qt.Key.Key_Backspace:
+            self._combo = ""
+            self._capturing = False
+            self._refresh()
+            return
+        if k in (Qt.Key.Key_Control, Qt.Key.Key_Alt, Qt.Key.Key_Shift, Qt.Key.Key_Meta):
+            return
+        mods = []
+        m = event.modifiers()
+        if m & Qt.KeyboardModifier.ControlModifier: mods.append("ctrl")
+        if m & Qt.KeyboardModifier.AltModifier: mods.append("alt")
+        if m & Qt.KeyboardModifier.ShiftModifier: mods.append("shift")
+        key_name = ""
+        if Qt.Key.Key_F1 <= k <= Qt.Key.Key_F12:
+            key_name = f"f{k - Qt.Key.Key_F1 + 1}"
+        elif Qt.Key.Key_A <= k <= Qt.Key.Key_Z:
+            key_name = chr(ord('a') + (k - Qt.Key.Key_A))
+        elif Qt.Key.Key_0 <= k <= Qt.Key.Key_9:
+            key_name = chr(ord('0') + (k - Qt.Key.Key_0))
+        elif k == Qt.Key.Key_Space:
+            key_name = "space"
+        elif k == Qt.Key.Key_Return or k == Qt.Key.Key_Enter:
+            key_name = "enter"
+        elif k == Qt.Key.Key_Tab:
+            key_name = "tab"
+        else:
+            txt = event.text()
+            if txt and txt.isprintable() and len(txt) == 1 and ord(txt) >= 0x20:
+                key_name = txt.lower()
+        if not key_name:
+            self._capturing = False
+            self._refresh()
+            return
+        combo = "+".join(mods + [key_name])
+        self._combo = combo
+        self._capturing = False
+        self._refresh()
 
 
 VOLC_BILLING_DOC_URL = "https://www.volcengine.com/docs/6561/1359370?lang=zh"
@@ -122,6 +201,7 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(self._build_billing_tab(), _icon("wallet"), " AI 模型与费用")
         self._tabs.addTab(self._build_volc_trial_tab(), _icon("gift"), " 火山引擎试用")
         self._tabs.addTab(self._build_overlay_tab(), _icon("captions"), " 字幕外观")
+        self._tabs.addTab(self._build_hotkeys_tab(), _icon("settings"), " 快捷键")
         self._tabs.addTab(self._build_usage_tab(), _icon("bar-chart-3"), " 用量统计")
 
         btn_box = QDialogButtonBox(
@@ -302,6 +382,38 @@ class SettingsDialog(QDialog):
 
         return w
 
+    def _build_hotkeys_tab(self) -> QWidget:
+        w = self._tab_widget()
+        form = QFormLayout(w)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        intro = QLabel(
+            "为常用功能设置全局快捷键。点击按钮后按下组合键即可绑定，"
+            "Esc 取消、Backspace 清除。留空表示不启用该快捷键。"
+        )
+        intro.setObjectName("routeLabel")
+        intro.setWordWrap(True)
+        form.addRow("", intro)
+
+        self._hk_subtitle = _HotkeyCaptureEdit()
+        form.addRow("开启/关闭 字幕", self._hk_subtitle)
+
+        self._hk_si = _HotkeyCaptureEdit()
+        form.addRow("开启/关闭 同声传译", self._hk_si)
+
+        self._hk_subtitle_drag = _HotkeyCaptureEdit()
+        form.addRow("开启/关闭 调整字幕位置", self._hk_subtitle_drag)
+
+        self._hk_typed_tts = _HotkeyCaptureEdit()
+        form.addRow("开启/关闭 打字翻译语音合成", self._hk_typed_tts)
+
+        self._hk_typed_panel = _HotkeyCaptureEdit()
+        form.addRow("开启/关闭 打字翻译悬浮界面", self._hk_typed_panel)
+
+        return w
+
     def _build_usage_tab(self) -> QWidget:
         w = self._tab_widget()
         form = QFormLayout(w)
@@ -441,6 +553,12 @@ class SettingsDialog(QDialog):
         else:
             self._volc_trial_balance.setText("余额：未申请")
 
+        self._hk_subtitle.set_combo(s.hotkey_subtitle_toggle)
+        self._hk_si.set_combo(s.hotkey_si_toggle)
+        self._hk_subtitle_drag.set_combo(s.hotkey_subtitle_drag_toggle)
+        self._hk_typed_tts.set_combo(s.hotkey_typed_tts_toggle)
+        self._hk_typed_panel.set_combo(s.typed_hotkey)
+
     def _collect(self) -> AppSettings:
         s = self._store.get()
         from dataclasses import replace
@@ -462,6 +580,11 @@ class SettingsDialog(QDialog):
             volc_trial_token=self._volc_trial_token.text().strip(),
             volc_trial_proxy_ws_url=self._volc_trial_proxy_ws_url.text().strip() or s.volc_trial_proxy_ws_url,
             volc_trial_api_base=self._volc_trial_api_base.text().strip() or s.volc_trial_api_base,
+            hotkey_subtitle_toggle=self._hk_subtitle.combo(),
+            hotkey_si_toggle=self._hk_si.combo(),
+            hotkey_subtitle_drag_toggle=self._hk_subtitle_drag.combo(),
+            hotkey_typed_tts_toggle=self._hk_typed_tts.combo(),
+            typed_hotkey=self._hk_typed_panel.combo() or s.typed_hotkey,
         )
 
     @Slot()
