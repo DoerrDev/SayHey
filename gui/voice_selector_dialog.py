@@ -196,8 +196,13 @@ class VoiceSelectorDialog(QDialog):
 
     def __init__(self, current_voice: str = "", parent=None) -> None:
         super().__init__(parent)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.FramelessWindowHint)
-        self.setWindowTitle("选择火山引擎音色")
+        self.setWindowFlags(
+            (self.windowFlags() & ~Qt.WindowType.FramelessWindowHint)
+            | Qt.WindowType.Window
+            | Qt.WindowType.WindowTitleHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        self.setWindowTitle("音频选择")
         self.setMinimumSize(960, 720)
         self._voices = load_voices()
         self._current_voice = current_voice
