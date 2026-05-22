@@ -33,6 +33,12 @@ jobs:
         shell: cmd
         run: python scripts\stamp_version.py %GITHUB_REF_NAME%
 
+      - name: Cache embedded Python
+        uses: actions/cache@v4
+        with:
+          path: resource/python_embed
+          key: python-embed-3.11.9-amd64-v1
+
       - name: Fetch embedded Python (for RVC sidecar)
         shell: cmd
         run: python scripts\fetch_python_embed.py
