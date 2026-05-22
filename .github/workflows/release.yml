@@ -37,7 +37,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resource/python_embed
-          key: python-embed-3.11.9-amd64-v1
+          key: python-embed-3.10.11-amd64-v1
 
       - name: Fetch embedded Python (for RVC sidecar)
         shell: cmd

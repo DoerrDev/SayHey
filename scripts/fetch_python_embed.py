@@ -6,7 +6,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-PY_VERSION = "3.11.9"
+PY_VERSION = "3.10.11"
 ROOT = Path(__file__).resolve().parent.parent
 EMBED_DIR = ROOT / "resource" / "python_embed"
 EMBED_ZIP_URL = f"https://www.python.org/ftp/python/{PY_VERSION}/python-{PY_VERSION}-embed-amd64.zip"
