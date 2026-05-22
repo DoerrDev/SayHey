@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSlider,
     QTextEdit,
     QVBoxLayout,
     QSizePolicy,
@@ -52,6 +53,8 @@ class MicTranslatePanel(QFrame):
     sig_speaker_id_changed = Signal(str)
     sig_running_changed = Signal(bool)
     sig_voice_warning = Signal(str)
+    sig_output_device_changed = Signal()
+    sig_speech_rate_changed = Signal(int)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -70,9 +73,12 @@ class MicTranslatePanel(QFrame):
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(10)
 
-        # Mic device row (no label prefix)
+        # Mic device row
         mic_row = QHBoxLayout()
-        mic_row.setSpacing(8)
+        mic_row.setSpacing(12)
+        mic_label = QLabel("麦克风选择")
+        mic_label.setObjectName("sectionTitle")
+        mic_row.addWidget(mic_label)
         self._mic_combo = QComboBox()
         self._mic_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         mic_row.addWidget(self._mic_combo, 1)
@@ -83,16 +89,45 @@ class MicTranslatePanel(QFrame):
         mic_row.addWidget(refresh_btn)
         layout.addLayout(mic_row)
 
+        # Virtual mic output row
+        out_row = QHBoxLayout()
+        out_row.setSpacing(12)
+        out_label = QLabel("虚拟麦克风")
+        out_label.setObjectName("sectionTitle")
+        out_label.setToolTip("翻译后的音频将输出到该设备（一般选 CABLE Input）")
+        out_row.addWidget(out_label)
+        self._out_combo = QComboBox()
+        self._out_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._out_combo.currentIndexChanged.connect(self._on_output_changed)
+        out_row.addWidget(self._out_combo, 1)
+        layout.addLayout(out_row)
+
         # Engine (hidden — kept for state; configure via settings dialog)
         self._engine_combo = QComboBox()
         self._engine_combo.addItems(["huoshan", "mock"])
         self._engine_combo.currentTextChanged.connect(self._on_engine_changed)
         self._engine_combo.setVisible(False)
 
+        sim_row = QHBoxLayout()
+        sim_row.setSpacing(10)
         self._simultaneous_checkbox = QCheckBox("同声传译")
         self._simultaneous_checkbox.setChecked(True)
         self._simultaneous_checkbox.setToolTip("选中：麦克风发送到服务商，转译音频输出到虚拟声卡；取消：麦克风直接输出到虚拟声卡。")
-        layout.addWidget(self._simultaneous_checkbox)
+        sim_row.addWidget(self._simultaneous_checkbox)
+        rate_label = QLabel("语速")
+        rate_label.setObjectName("routeLabel")
+        sim_row.addWidget(rate_label)
+        self._speech_rate = QSlider(Qt.Orientation.Horizontal)
+        self._speech_rate.setRange(-50, 100)
+        self._speech_rate.setFixedWidth(140)
+        self._speech_rate.setToolTip("范围：-50 到 100。0 是默认语速，负数更慢，正数更快。")
+        self._speech_rate.valueChanged.connect(self._on_speech_rate_changed)
+        sim_row.addWidget(self._speech_rate)
+        self._speech_rate_label = QLabel("0")
+        self._speech_rate_label.setMinimumWidth(34)
+        sim_row.addWidget(self._speech_rate_label)
+        sim_row.addStretch(1)
+        layout.addLayout(sim_row)
 
         # Compact language row: [src] → [tgt]
         lang_row = QHBoxLayout()
@@ -151,6 +186,15 @@ class MicTranslatePanel(QFrame):
             if idx >= 0:
                 self._mic_combo.setCurrentIndex(idx)
 
+        prev_out_index = self.selected_output_device().index if self.selected_output_device() else None
+        self._out_combo.blockSignals(True)
+        self._out_combo.clear()
+        for device in self._resolver.output_devices():
+            self._out_combo.addItem(self._device_label(device), device)
+        if prev_out_index is not None:
+            self.set_output_by_index(prev_out_index)
+        self._out_combo.blockSignals(False)
+
     def _stable_logical_inputs(self) -> list[AudioDevice]:
         by_name: dict[str, list[AudioDevice]] = {}
         for device in self._resolver.input_devices():
@@ -184,6 +228,33 @@ class MicTranslatePanel(QFrame):
 
     def selected_mic_device(self) -> AudioDevice | None:
         return self._mic_combo.currentData()
+
+    def selected_output_device(self) -> AudioDevice | None:
+        return self._out_combo.currentData()
+
+    def set_output_by_index(self, index: int | None) -> None:
+        if index is None:
+            return
+        for i in range(self._out_combo.count()):
+            device: AudioDevice | None = self._out_combo.itemData(i)
+            if device and device.index == index:
+                self._out_combo.setCurrentIndex(i)
+                return
+
+    @Slot()
+    def _on_output_changed(self) -> None:
+        self.sig_output_device_changed.emit()
+
+    def selected_speech_rate(self) -> int:
+        return self._speech_rate.value()
+
+    def set_speech_rate(self, value: int) -> None:
+        self._speech_rate.setValue(int(value))
+
+    @Slot(int)
+    def _on_speech_rate_changed(self, value: int) -> None:
+        self._speech_rate_label.setText(f"+{value}" if value > 0 else str(value))
+        self.sig_speech_rate_changed.emit(value)
 
     def selected_engine(self) -> str:
         return self._engine_combo.currentText()
@@ -261,8 +332,10 @@ class MicTranslatePanel(QFrame):
             self._toggle_btn.setObjectName("")
         self._toggle_btn.style().polish(self._toggle_btn)
         self._mic_combo.setEnabled(not running)
+        self._out_combo.setEnabled(not running)
         self._engine_combo.setEnabled(not running)
         self._simultaneous_checkbox.setEnabled(not running)
+        self._speech_rate.setEnabled(not running)
         self._src_lang_combo.setEnabled(not running)
         self._tgt_lang_combo.setEnabled(not running)
         self.sig_running_changed.emit(running)

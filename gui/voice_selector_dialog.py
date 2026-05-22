@@ -201,8 +201,11 @@ class VoiceSelectorDialog(QDialog):
             | Qt.WindowType.Window
             | Qt.WindowType.WindowTitleHint
             | Qt.WindowType.WindowCloseButtonHint
+            | Qt.WindowType.WindowMinMaxButtonsHint
         )
         self.setWindowTitle("音频选择")
+        self.setModal(False)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setMinimumSize(960, 720)
         self._voices = load_voices()
         self._current_voice = current_voice
@@ -235,25 +238,12 @@ class VoiceSelectorDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Header
-        header = QHBoxLayout()
-        header.setContentsMargins(20, 16, 18, 12)
-        header.setSpacing(14)
-        title_box = QVBoxLayout()
-        title_box.setSpacing(4)
-        title = QLabel("选择火山引擎音色")
-        title.setObjectName("voiceDialogTitle")
+        # Subtitle hint (title now shown by native window title bar)
         subtitle = QLabel("数据来源 seed-tts-2.0；标有「同传可用」的两个音色可用于同声传译，其余仅打字翻译。")
         subtitle.setObjectName("voiceDialogSubtitle")
         subtitle.setWordWrap(True)
-        title_box.addWidget(title)
-        title_box.addWidget(subtitle)
-        header.addLayout(title_box, 1)
-        close_btn = QPushButton("×")
-        close_btn.setObjectName("voiceCloseButton")
-        close_btn.clicked.connect(self.reject)
-        header.addWidget(close_btn, 0, Qt.AlignmentFlag.AlignTop)
-        root.addLayout(header)
+        subtitle.setContentsMargins(20, 14, 20, 8)
+        root.addWidget(subtitle)
 
         # Search row
         search_row = QHBoxLayout()

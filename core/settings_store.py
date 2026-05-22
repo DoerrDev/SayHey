@@ -27,6 +27,7 @@ class AppSettings:
     game_subtitle_source_language: str = "en"
     game_subtitle_target_language: str = "zh"
     mic_input_index: Optional[int] = None
+    mic_output_index: Optional[int] = None
     game_audio_device_name: str = ""
     overlay_font_size: int = 32
     overlay_opacity: float = 0.85

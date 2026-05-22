@@ -24,6 +24,7 @@ SpeechStartCallback = Callable[[float], None]
 class AudioRouteConfig:
     input_device_index: Optional[int]
     input_device_name: Optional[str]
+    output_device_index: Optional[int] = None
     output_device_name: str = "CABLE Input"
     verification_device_name: str = "CABLE Output"
     record_translated_wav: bool = True
