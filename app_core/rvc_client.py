@@ -330,8 +330,8 @@ class RvcSidecarManager:
         self._buf_lock = threading.Lock()
         self._pcm_buf = bytearray()
         self._chunk_target = 0
-        # worker thread for async inference
-        self._infer_queue: queue.Queue = queue.Queue(maxsize=4)
+        # worker thread for async inference; no maxsize — drop silence not words
+        self._infer_queue: queue.Queue = queue.Queue()
         self._worker_thread: Optional[threading.Thread] = None
         self._worker_running = False
 
@@ -440,15 +440,4 @@ class RvcSidecarManager:
                 return
             chunk = bytes(self._pcm_buf)
             self._pcm_buf.clear()
-        try:
-            self._infer_queue.put_nowait((chunk, sample_rate))
-        except queue.Full:
-            # inference can't keep up; drop oldest, enqueue latest
-            try:
-                self._infer_queue.get_nowait()
-            except queue.Empty:
-                pass
-            try:
-                self._infer_queue.put_nowait((chunk, sample_rate))
-            except queue.Full:
-                pass
+        self._infer_queue.put((chunk, sample_rate))

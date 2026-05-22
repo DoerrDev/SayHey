@@ -24,6 +24,7 @@ _rvc = None          # RVCInference instance, created lazily on first load
 _device = "cpu:0"
 _pitch = 0
 _index_rate = 0.5
+_F0_METHOD = "rmvpe"  # harvest=high quality but slow; rmvpe=fast+good; pm=fastest
 
 
 def _resolve_device(raw: str) -> str:
@@ -76,7 +77,7 @@ async def load_model(request: Request):
         if _rvc is None:
             _rvc = RVCInference(device=_device)
         _rvc.load_model(model_path, index_path=index_path if index_path else "")
-        _rvc.set_params(f0up_key=pitch, index_rate=index_rate)
+        _rvc.set_params(f0up_key=pitch, index_rate=index_rate, f0method=_F0_METHOD)
         _pitch = pitch
         _index_rate = index_rate
     except Exception as exc:
@@ -96,7 +97,7 @@ async def set_params(request: Request):
         _index_rate = float(body["index_rate"])
 
     if _rvc is not None:
-        _rvc.set_params(f0up_key=_pitch, index_rate=_index_rate)
+        _rvc.set_params(f0up_key=_pitch, index_rate=_index_rate, f0method=_F0_METHOD)
 
     return {"ok": True}
 
