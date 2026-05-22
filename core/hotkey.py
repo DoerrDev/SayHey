@@ -45,6 +45,77 @@ def parse_hotkey(text: str) -> tuple[int, int] | None:
     return mods, vk
 
 
+def format_hotkey(raw: str) -> str:
+    parts = [p.strip() for p in (raw or "").split("+") if p.strip()]
+    if not parts:
+        return "未绑定"
+    return " + ".join(p[:1].upper() + p[1:] if len(p) > 1 else p.upper() for p in parts)
+
+
+class HotkeyManager(QAbstractNativeEventFilter):
+    """Manage multiple global hotkeys, each identified by a string action key."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._user32 = ctypes.windll.user32
+        # action -> (id, callback, combo)
+        self._actions: dict[str, tuple[int, Callable[[], None], str]] = {}
+        # id -> action
+        self._id_to_action: dict[int, str] = {}
+        self._next_id = 1
+
+    def register_action(self, action: str, combo: str, callback: Callable[[], None]) -> bool:
+        self.unregister_action(action)
+        if not combo:
+            return False
+        parsed = parse_hotkey(combo)
+        if parsed is None:
+            return False
+        mods, vk = parsed
+        hk_id = self._next_id
+        self._next_id += 1
+        ok = bool(self._user32.RegisterHotKey(None, hk_id, mods, vk))
+        if not ok:
+            return False
+        self._actions[action] = (hk_id, callback, combo)
+        self._id_to_action[hk_id] = action
+        return True
+
+    def unregister_action(self, action: str) -> None:
+        entry = self._actions.pop(action, None)
+        if entry is None:
+            return
+        hk_id, _, _ = entry
+        self._id_to_action.pop(hk_id, None)
+        try:
+            self._user32.UnregisterHotKey(None, hk_id)
+        except Exception:
+            pass
+
+    def unregister_all(self) -> None:
+        for action in list(self._actions.keys()):
+            self.unregister_action(action)
+
+    def nativeEventFilter(self, eventType, message):  # type: ignore[override]
+        if eventType in (b"windows_generic_MSG", QByteArray(b"windows_generic_MSG")):
+            try:
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+            except Exception:
+                return False, 0
+            if msg.message == _WM_HOTKEY:
+                action = self._id_to_action.get(int(msg.wParam))
+                if action is not None:
+                    entry = self._actions.get(action)
+                    if entry is not None:
+                        try:
+                            entry[1]()
+                        except Exception:
+                            pass
+                        return True, 0
+        return False, 0
+
+
+# Backwards-compat single-hotkey wrapper (unused by new code; keep until removed elsewhere)
 class GlobalHotkey(QAbstractNativeEventFilter):
     def __init__(self, callback: Callable[[], None]) -> None:
         super().__init__()

@@ -29,7 +29,8 @@ from gui.mic_panel import MicTranslatePanel
 from gui.mic_area import MicAreaPanel
 from gui.float_input import FloatingInputWindow
 from gui.overlay_window import SubtitleOverlay
-from core.hotkey import GlobalHotkey
+from core.hotkey import HotkeyManager, format_hotkey
+from gui.toast import show_toast
 from app_core.typed_engine import DoubaoTranslateConfig, DoubaoTtsConfig, resolve_doubao_tts_speaker
 from app_core.typed_controller import TypedTranslateController, TypedConfig
 from core.bridge import TypedTranslateThread
@@ -162,12 +163,11 @@ class MainWindow(QMainWindow):
         self._typed_controller: Optional[TypedTranslateController] = None
         self._typed_thread: Optional[TypedTranslateThread] = None
         self._typed_busy = False
-        self._typed_hotkey_binding = False
 
-        # Global hotkey
-        self._hotkey = GlobalHotkey(self._on_hotkey_pressed)
+        # Global hotkeys
+        self._hotkeys = HotkeyManager()
         from PySide6.QtWidgets import QApplication
-        QApplication.instance().installNativeEventFilter(self._hotkey)
+        QApplication.instance().installNativeEventFilter(self._hotkeys)
 
     def _connect_signals(self) -> None:
         # Header actions
@@ -195,7 +195,6 @@ class MainWindow(QMainWindow):
         # Typed panel
         self._typed_panel.sig_translate_requested.connect(self._on_typed_submit)
         self._typed_panel.sig_settings_changed.connect(self._on_typed_settings_changed)
-        self._typed_panel.sig_rebind_hotkey.connect(self._begin_hotkey_rebind)
 
         # Checklist
         self._checklist.sig_status.connect(self._on_status)
@@ -212,8 +211,7 @@ class MainWindow(QMainWindow):
         self.sig_game_error.connect(self._on_game_error)
 
     def _hotkey_display(self, raw: str) -> str:
-        parts = [p.strip() for p in (raw or "").split("+") if p.strip()]
-        return " + ".join(p[:1].upper() + p[1:] if len(p) > 1 else p.upper() for p in parts) or "未绑定"
+        return format_hotkey(raw)
 
     def _on_typed_settings_changed(self) -> None:
         s = self._store.get()
@@ -293,53 +291,53 @@ class MainWindow(QMainWindow):
         self._log_panel.append(f"[typed-error] {msg}")
         QMessageBox.warning(self, "打字翻译失败", msg)
 
-    def _begin_hotkey_rebind(self) -> None:
-        self._typed_hotkey_binding = True
-        self._typed_panel.set_hotkey_label("请按新的组合键…")
-        self._hotkey.unregister()
-        self.activateWindow()
-        self.setFocus()
-
-    def keyPressEvent(self, event) -> None:
-        if self._typed_hotkey_binding:
-            from PySide6.QtCore import Qt as _Qt
-            k = event.key()
-            if k in (_Qt.Key.Key_Control, _Qt.Key.Key_Alt, _Qt.Key.Key_Shift, _Qt.Key.Key_Meta):
-                return
-            mods = []
-            m = event.modifiers()
-            if m & _Qt.KeyboardModifier.ControlModifier: mods.append("ctrl")
-            if m & _Qt.KeyboardModifier.AltModifier: mods.append("alt")
-            if m & _Qt.KeyboardModifier.ShiftModifier: mods.append("shift")
-            key_name = event.text().strip() or ""
-            if not key_name:
-                if _Qt.Key.Key_F1 <= k <= _Qt.Key.Key_F12:
-                    key_name = f"f{k - _Qt.Key.Key_F1 + 1}"
-            if not key_name:
-                self._typed_hotkey_binding = False
-                self._apply_hotkey(self._store.get().typed_hotkey)
-                return
-            combo = "+".join(mods + [key_name.lower()])
-            self._typed_hotkey_binding = False
-            self._store.save(replace(self._store.get(), typed_hotkey=combo))
-            self._apply_hotkey(combo)
-            return
-        super().keyPressEvent(event)
-
-    def _apply_hotkey(self, combo: str) -> None:
-        if self._hotkey.register(combo):
-            self._typed_panel.set_hotkey_label(self._hotkey_display(combo))
-            self._log_panel.append(f"热键已绑定：{combo}")
-        else:
-            self._typed_panel.set_hotkey_label("热键绑定失败")
-            self._log_panel.append(f"热键绑定失败：{combo}")
+    def _apply_hotkeys(self, s: AppSettings) -> None:
+        self._hotkeys.unregister_all()
+        bindings = [
+            ("typed_panel", s.typed_hotkey, self._hk_toggle_typed_panel),
+            ("subtitle", s.hotkey_subtitle_toggle, self._hk_toggle_subtitle),
+            ("si", s.hotkey_si_toggle, self._hk_toggle_si),
+            ("subtitle_drag", s.hotkey_subtitle_drag_toggle, self._hk_toggle_subtitle_drag),
+            ("typed_tts", s.hotkey_typed_tts_toggle, self._hk_toggle_typed_tts),
+        ]
+        for action, combo, cb in bindings:
+            if not combo:
+                continue
+            if self._hotkeys.register_action(action, combo, cb):
+                self._log_panel.append(f"热键已绑定 [{action}]：{combo}")
+            else:
+                self._log_panel.append(f"热键绑定失败 [{action}]：{combo}")
         self._refresh_float_chips()
 
-    def _on_hotkey_pressed(self) -> None:
+    def _hk_toggle_typed_panel(self) -> None:
         if self._float_input.isVisible():
             self._float_input.hide()
-            return
-        self._float_input.show_centered(self.screen())
+        else:
+            self._float_input.show_centered(self.screen())
+
+    def _hk_toggle_subtitle(self) -> None:
+        self._toggle_overlay()
+        show_toast("字幕已开启" if self._overlay.isVisible() else "字幕已关闭")
+
+    def _hk_toggle_si(self) -> None:
+        running = self._mic_thread is not None and self._mic_thread.isRunning()
+        if running:
+            self._stop_mic()
+            show_toast("同声传译已关闭")
+        else:
+            self._start_mic()
+            if self._mic_thread is not None:
+                show_toast("同声传译已开启")
+
+    def _hk_toggle_subtitle_drag(self) -> None:
+        new_state = not self._header._adjust_btn.isChecked()
+        self._header._adjust_btn.setChecked(new_state)
+        show_toast("字幕可拖动" if new_state else "字幕已锁定")
+
+    def _hk_toggle_typed_tts(self) -> None:
+        new_state = not self._typed_panel.auto_tts()
+        self._typed_panel.set_auto_tts(new_state)
+        show_toast("打字翻译语音合成已开启" if new_state else "打字翻译语音合成已关闭")
 
     def _apply_settings(self, s: AppSettings) -> None:
         self._header.set_usage_visible(s.usage_tracking_enabled)
@@ -374,7 +372,7 @@ class MainWindow(QMainWindow):
         self._typed_panel.set_source(s.typed_source_language)
         self._typed_panel.set_target(s.typed_target_language)
         self._typed_panel.set_auto_tts(s.typed_auto_tts)
-        self._apply_hotkey(s.typed_hotkey)
+        self._apply_hotkeys(s)
 
     @Slot()
     def _start_mic(self) -> None:
@@ -675,7 +673,7 @@ class MainWindow(QMainWindow):
             self._msg_poller.wait(2000)
         self._overlay.close()
         self._float_input.close()
-        self._hotkey.unregister()
+        self._hotkeys.unregister_all()
         if self._typed_controller is not None:
             self._typed_controller.close()
             self._typed_controller = None

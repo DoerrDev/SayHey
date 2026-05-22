@@ -51,6 +51,10 @@ class AppSettings:
     typed_target_language: str = "en"
     typed_auto_tts: bool = True
     typed_hotkey: str = "ctrl+alt+t"
+    hotkey_subtitle_toggle: str = ""
+    hotkey_si_toggle: str = ""
+    hotkey_subtitle_drag_toggle: str = ""
+    hotkey_typed_tts_toggle: str = ""
 
 
 class SettingsStore:
