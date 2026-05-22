@@ -121,8 +121,7 @@ class MainWindow(QMainWindow):
 
         # Top: two panels side by side
         top_splitter = QSplitter(Qt.Orientation.Horizontal)
-        top_splitter.setHandleWidth(8)
-        top_splitter.setStyleSheet("QSplitter::handle { background: rgba(163,207,255,0.08); }")
+        top_splitter.setHandleWidth(0)
 
         self._game_panel = GameSubtitlePanel()
         top_splitter.addWidget(self._game_panel)
@@ -191,6 +190,7 @@ class MainWindow(QMainWindow):
         self._mic_panel.sig_stop_requested.connect(self._stop_mic)
         self._mic_panel.sig_test_cable.connect(self._test_cable)
         self._mic_panel.sig_select_voice.connect(self._open_voice_selector)
+        self._mic_panel.sig_voice_warning.connect(lambda msg: (self._header.set_status(msg, "warn"), self._log_panel.append(msg)))
 
         # Typed panel
         self._typed_panel.sig_translate_requested.connect(self._on_typed_submit)

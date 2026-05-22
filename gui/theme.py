@@ -24,6 +24,22 @@ QFrame#card {
     border: 1px solid rgba(163, 207, 255, 0.12);
     border-radius: 20px;
 }
+QFrame#cardLeft {
+    background-color: rgba(17, 27, 37, 0.95);
+    border: 1px solid rgba(163, 207, 255, 0.12);
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+}
+QFrame#cardRight {
+    background-color: rgba(17, 27, 37, 0.95);
+    border: 1px solid rgba(163, 207, 255, 0.12);
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+    border-top-left-radius: 0px;
+    border-bottom-left-radius: 0px;
+}
 
 /* === Primary button === */
 QPushButton {
@@ -403,11 +419,26 @@ QLabel#hotkeyBox {
 }
 
 /* === Mic tabs (inner QTabWidget) === */
+QTabWidget#micTabs {
+    background-color: rgba(17, 27, 37, 0.95);
+}
+QTabWidget#micTabs QTabBar {
+    background-color: rgba(17, 27, 37, 0.95);
+}
 QTabWidget#micTabs::pane {
-    border: 1px solid rgba(163, 207, 255, 0.08);
-    border-radius: 14px;
+    border: none;
+    border-top: 1px solid rgba(163, 207, 255, 0.08);
+    border-radius: 0px;
     background: transparent;
     top: -1px;
+}
+QTabWidget#micTabs QTabBar::tab {
+    border-radius: 8px;
+}
+QFrame#tabContent {
+    background-color: rgba(17, 27, 37, 0.95);
+    border: none;
+    border-radius: 0px;
 }
 
 /* === Floating input window === */

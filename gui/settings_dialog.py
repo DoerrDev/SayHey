@@ -101,6 +101,7 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("配置中心")
         self.setMinimumWidth(680)
         self.setMinimumHeight(500)
+        self.resize(900, 600)
         self._store = store
         self._build_ui()
         self._populate(store.get())
