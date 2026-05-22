@@ -23,6 +23,7 @@ class AppSettings:
     s2s_target_language: str = "zh"
     s2s_speaker_id: str = "zh_female_xiaohe_jupiter_bigtts"
     s2s_speech_rate: int = 0
+    mic_simultaneous_interpretation_enabled: bool = True
     game_subtitle_source_language: str = "en"
     game_subtitle_target_language: str = "zh"
     mic_input_index: Optional[int] = None
@@ -116,6 +117,8 @@ class SettingsStore:
             s2s_target_language=get("S2S_TARGET_LANGUAGE") or get("TARGET_LANGUAGE", "zh"),
             s2s_speaker_id=get("S2S_SPEAKER_ID", "zh_female_xiaohe_jupiter_bigtts"),
             s2s_speech_rate=int(get("S2S_SPEECH_RATE", "0") or "0"),
+            mic_simultaneous_interpretation_enabled=get("MIC_SIMULTANEOUS_INTERPRETATION", "1")
+            not in {"0", "false", "False"},
             game_subtitle_source_language=get("GAME_SUBTITLE_SOURCE_LANGUAGE", "en"),
             game_subtitle_target_language=get("GAME_SUBTITLE_TARGET_LANGUAGE", "zh"),
             mic_input_index=mic_idx,
@@ -140,6 +143,7 @@ class SettingsStore:
             "S2S_TARGET_LANGUAGE": s.s2s_target_language,
             "S2S_SPEAKER_ID": s.s2s_speaker_id,
             "S2S_SPEECH_RATE": str(s.s2s_speech_rate),
+            "MIC_SIMULTANEOUS_INTERPRETATION": "1" if s.mic_simultaneous_interpretation_enabled else "0",
             "GAME_SUBTITLE_SOURCE_LANGUAGE": s.game_subtitle_source_language,
             "GAME_SUBTITLE_TARGET_LANGUAGE": s.game_subtitle_target_language,
             "GAME_AUDIO_DEVICE_NAME": s.game_audio_device_name,

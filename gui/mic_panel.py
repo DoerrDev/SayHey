@@ -3,6 +3,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import (
     QComboBox,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -87,6 +88,11 @@ class MicTranslatePanel(QFrame):
         self._engine_combo.addItems(["huoshan", "mock"])
         self._engine_combo.currentTextChanged.connect(self._on_engine_changed)
         self._engine_combo.setVisible(False)
+
+        self._simultaneous_checkbox = QCheckBox("同声传译")
+        self._simultaneous_checkbox.setChecked(True)
+        self._simultaneous_checkbox.setToolTip("选中：麦克风发送到服务商，转译音频输出到虚拟声卡；取消：麦克风直接输出到虚拟声卡。")
+        layout.addWidget(self._simultaneous_checkbox)
 
         # Compact language row: [src] → [tgt]
         lang_row = QHBoxLayout()
@@ -191,6 +197,12 @@ class MicTranslatePanel(QFrame):
     def selected_speaker_id(self) -> str:
         return self._speaker_id
 
+    def simultaneous_interpretation_enabled(self) -> bool:
+        return self._simultaneous_checkbox.isChecked()
+
+    def set_simultaneous_interpretation_enabled(self, enabled: bool) -> None:
+        self._simultaneous_checkbox.setChecked(enabled)
+
     def set_mic_by_index(self, index: int | None) -> None:
         if index is None:
             return
@@ -250,6 +262,7 @@ class MicTranslatePanel(QFrame):
         self._toggle_btn.style().polish(self._toggle_btn)
         self._mic_combo.setEnabled(not running)
         self._engine_combo.setEnabled(not running)
+        self._simultaneous_checkbox.setEnabled(not running)
         self._src_lang_combo.setEnabled(not running)
         self._tgt_lang_combo.setEnabled(not running)
         self.sig_running_changed.emit(running)
