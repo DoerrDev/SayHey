@@ -42,6 +42,14 @@ from core.usage_tracker import UsageTracker
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 
+def _list_speaker_names() -> list[str]:
+    try:
+        import soundcard as sc
+        return [s.name for s in sc.all_speakers()]
+    except Exception:
+        return []
+
+
 class MainWindow(QMainWindow):
     # Cross-thread signals (connected to main-thread slots)
     sig_status = Signal(str)
@@ -175,6 +183,8 @@ class MainWindow(QMainWindow):
         self._game_panel.sig_start_requested.connect(self._start_game)
         self._game_panel.sig_stop_requested.connect(self._stop_game)
         self._game_panel.sig_overlay_toggle.connect(self._toggle_overlay)
+        self._game_panel.sig_audio_device_changed.connect(self._on_game_audio_changed)
+        self._game_audio_accepted = ""
 
         # Mic panel
         self._mic_panel.sig_start_requested.connect(self._start_mic)
@@ -344,6 +354,9 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_speaker_id(s.s2s_speaker_id)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
+        self._game_panel.set_audio_devices(_list_speaker_names(), s.game_audio_device_name)
+        self._game_audio_accepted = s.game_audio_device_name or ""
+        self._apply_mic_conflict_state(self._game_audio_accepted)
         self._game_panel.set_max_lines(s.overlay_max_lines)
         self._game_panel.set_show_source(s.overlay_show_source)
         # Overlay appearance
@@ -440,6 +453,48 @@ class MainWindow(QMainWindow):
         self._header.set_status("错误", "error")
         QMessageBox.critical(self, "运行错误", msg)
 
+    def _is_cable_input_device(self, name: str) -> bool:
+        if not name:
+            return False
+        cable = (self._store.get().vb_cable_input_name or "CABLE Input").strip().lower()
+        return cable and cable in name.lower()
+
+    def _apply_mic_conflict_state(self, device_name: str) -> None:
+        conflict = self._is_cable_input_device(device_name)
+        self._mic_area.voice.setEnabled(not conflict)
+        if conflict:
+            self._mic_area.voice.setToolTip("游戏字幕音频源占用了同一根虚拟线，同声传译已禁用")
+        else:
+            self._mic_area.voice.setToolTip("")
+
+    @Slot(str)
+    def _on_game_audio_changed(self, name: str) -> None:
+        if not self._is_cable_input_device(name):
+            self._game_audio_accepted = name
+            self._apply_mic_conflict_state(name)
+            return
+        if self._mic_thread is not None and self._mic_thread.isRunning():
+            QMessageBox.warning(
+                self,
+                "冲突",
+                "同声传译正在运行，无法选择该虚拟线。请先停止同声传译。",
+            )
+            self._game_panel.set_audio_device(self._game_audio_accepted)
+            return
+        resp = QMessageBox.question(
+            self,
+            "确认",
+            "该设备与同声传译使用同一根虚拟线。\n"
+            "选中后将自动禁用同声传译功能，是否继续？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if resp != QMessageBox.StandardButton.Yes:
+            self._game_panel.set_audio_device(self._game_audio_accepted)
+            return
+        self._game_audio_accepted = name
+        self._apply_mic_conflict_state(name)
+
     @Slot()
     def _start_game(self) -> None:
         if self._game_thread is not None and self._game_thread.isRunning():
@@ -454,10 +509,16 @@ class MainWindow(QMainWindow):
                 )
             src = self._game_panel.selected_source_language()
             tgt = self._game_panel.selected_target_language()
+            audio_device = self._game_panel.selected_audio_device()
             config.source_language = src
             config.target_language = tgt
-            # Persist language choice to settings
-            self._store.save(replace(self._store.get(), game_subtitle_source_language=src, game_subtitle_target_language=tgt))
+            config.audio_device_name = audio_device or None
+            self._store.save(replace(
+                self._store.get(),
+                game_subtitle_source_language=src,
+                game_subtitle_target_language=tgt,
+                game_audio_device_name=audio_device,
+            ))
         except Exception as exc:
             QMessageBox.critical(self, "游戏字幕配置错误", str(exc))
             return

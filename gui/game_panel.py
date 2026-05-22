@@ -51,6 +51,7 @@ class GameSubtitlePanel(QFrame):
     sig_stop_requested = Signal()
     sig_overlay_toggle = Signal()
     sig_subtitle_flushed = Signal(str)  # buffered text ready for overlay
+    sig_audio_device_changed = Signal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -111,6 +112,24 @@ class GameSubtitlePanel(QFrame):
         lang_row.addStretch()
         layout.addLayout(lang_row)
 
+        # Audio source row
+        audio_row = QHBoxLayout()
+        audio_row.setSpacing(12)
+        audio_label = QLabel("音频源")
+        audio_label.setObjectName("sectionTitle")
+        audio_row.addWidget(audio_label)
+        self._audio_combo = QComboBox()
+        self._audio_combo.setToolTip(
+            "选择要监听的扬声器设备（loopback 捕获）。\n"
+            "把游戏音频输出到 CABLE Input 后选它，物理扬声器放音乐不影响翻译。"
+        )
+        self._audio_combo.setMinimumWidth(260)
+        self._audio_combo.currentIndexChanged.connect(
+            lambda _i: self.sig_audio_device_changed.emit(self.selected_audio_device())
+        )
+        audio_row.addWidget(self._audio_combo, 1)
+        layout.addLayout(audio_row)
+
         # Constraint hint (shown when neither side is zh/en)
         self._lang_hint = QLabel("⚠ 源语言或字幕语言中，至少有一个需为中文或英语")
         self._lang_hint.setObjectName("routeLabel")
@@ -168,6 +187,30 @@ class GameSubtitlePanel(QFrame):
         if idx >= 0:
             self._tgt_combo.setCurrentIndex(idx)
 
+    def set_audio_devices(self, device_names: list[str], current: str = "") -> None:
+        self._audio_combo.blockSignals(True)
+        self._audio_combo.clear()
+        self._audio_combo.addItem("默认扬声器（系统）", "")
+        for name in device_names:
+            self._audio_combo.addItem(name, name)
+        if current:
+            idx = self._audio_combo.findData(current)
+            if idx >= 0:
+                self._audio_combo.setCurrentIndex(idx)
+        self._audio_combo.blockSignals(False)
+
+    def selected_audio_device(self) -> str:
+        return self._audio_combo.currentData() or ""
+
+    def set_audio_device(self, name: str) -> None:
+        self._audio_combo.blockSignals(True)
+        idx = self._audio_combo.findData(name or "")
+        if idx >= 0:
+            self._audio_combo.setCurrentIndex(idx)
+        else:
+            self._audio_combo.setCurrentIndex(0)
+        self._audio_combo.blockSignals(False)
+
     @Slot()
     def _on_toggle(self) -> None:
         if self._is_running:
@@ -183,6 +226,7 @@ class GameSubtitlePanel(QFrame):
         self._is_running = running
         self._src_combo.setEnabled(not running)
         self._tgt_combo.setEnabled(not running)
+        self._audio_combo.setEnabled(not running)
         if not running:
             self._source_buffer.reset()
             self._translation_buffer.reset()
