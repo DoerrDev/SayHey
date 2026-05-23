@@ -4,12 +4,17 @@
 
 [中文说明](README.md) | English
 
-SayHey is a Windows desktop app for real-time voice translation and game subtitle overlay.
+SayHey is a Windows desktop real-time voice translation tool, designed for in-game voice chat, foreign-language live subtitles, and cross-language meetings.
 
-It currently supports two main workflows:
+Main panel preview:
 
-1. Live interpretation: capture your microphone, translate speech in real time, and forward translated audio into a virtual audio device.
-2. Game subtitles: capture current Windows speaker or headphone output and render translated subtitles in a desktop overlay.
+![Main Panel](resource/MainPannel.png)
+
+## Core Capabilities
+
+- **Live interpretation**: capture your microphone, translate your speech in real time, and forward the translated audio to a virtual audio device so teammates / the other party hear the translation directly in their game or voice app.
+- **Game subtitles**: capture system speaker output and render the foreign-language audio of games / videos / calls as an on-screen overlay subtitle in real time.
+- **Typed translation**: type instead of speaking — the text is translated, synthesized to speech, and sent to the virtual microphone, so you can "speak" a foreign language without opening your mouth.
 
 ## Download First
 
@@ -17,27 +22,57 @@ If you just want to try it:
 
 1. Open the `Releases` page of this repository.
 2. Download the latest Windows package.
-3. Unzip it.
-4. Run `sayhey.exe`.
-5. Open the in-app settings page and fill in your own service credentials.
+3. Unzip it and run `sayhey.exe`.
+4. On first launch you can use the built-in trial quota, or fill in your own Volcengine key from the settings dialog at the top-right.
+5. The app supports **auto-update** — new versions will prompt to download automatically.
+
+## Features
+
+### Translation & subtitles
+- Real-time microphone interpretation (Doubao end-to-end speech model)
+- System audio overlay subtitles (WASAPI loopback capture)
+- Typed translation → text-to-speech output
+- Optional: show source text alongside translated subtitles
+- Free choice of source / target languages
+
+### Voice customization
+- Voice picker dialog with multiple Doubao / Seed TTS 2.0 voices, draggable preview window
+- Speech rate adjustment (-50 ~ +100)
+- Save translated audio to disk
+
+### Hotkeys & on-screen hints
+- Customizable global hotkey system
+- Supports mouse side buttons (X1/X2) as hotkeys
+- One-key toggle for mic and subtitles
+- Floating on-screen hint when triggering actions
+
+### Devices & audio
+- One-click virtual sound card (VB-Cable) detection
+- Switch microphone / virtual sound card / subtitle audio source directly from the main panel
+- Automatic conflict handling when game subtitles and live interpretation share the same virtual line
+
+### Other
+- Built-in trial proxy (`trial.sayhey.top`) — no key required for first try
+- Usage tracking & billing (cumulative MT / TTS tokens)
+- Built-in feedback / feature-request entry, automatically attaches the app version
+- Auto-update (GitHub / Gitee dual source)
+- Runtime log panel for latency and error inspection
 
 ## Engine Notes
 
-### Volcengine engine
+The underlying engine is primarily **Volcengine (Doubao)** real-time large-model speech services, powering all three pipelines: live interpretation, game subtitles, and typed translation.
 
-- Supports live interpretation
-- Supports game subtitles
-- Requires your own Volcengine key
+- First-time use: try directly with the built-in trial quota
+- Long-term use: bring your own Volcengine key
 
 Volcengine console shortcut:
-
 https://console.volcengine.com/speech/new/overview?projectName=default
 
 ## Before Use
 
-### For live interpretation
+### Live interpretation
 
-- VB-Cable is recommended
+- [VB-Cable](https://vb-audio.com/Cable/) is recommended
 - In your target app or game, set the microphone to `CABLE Output`
 
 Default audio route:
@@ -46,17 +81,17 @@ Default audio route:
 Real microphone -> SayHey -> CABLE Input -> CABLE Output -> target app
 ```
 
-### For game subtitles
+### Game subtitles
 
 - VB-Cable is not required
-- SayHey captures system playback audio through WASAPI loopback
-- This workflow currently depends on Volcengine
+- Captures system playback through WASAPI loopback
+- You can pick a specific speaker / headphone under "Audio source" on the main panel
 
 ## Run From Source
 
 ### Requirements
 
-- Windows
+- Windows 10/11
 - Python 3.11 or newer
 
 ### Install dependencies
@@ -71,7 +106,7 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-On first run, the app creates `settings.json` automatically if it does not exist yet. You can also manage settings from the in-app settings dialog.
+On first run, `settings.json` is created automatically if it does not exist. You can also manage settings from the in-app settings dialog.
 
 ### List local audio devices
 
@@ -91,9 +126,22 @@ python scripts\realtime_s2s_voice_demo.py
 build\build_nuitka.bat
 ```
 
-The build script generates the Windows executable directory and zip package in `dist\`.
+The build script generates the Windows executable directory and zip package under `dist\`. Pushing a `v*` tag to the repository triggers CI to build and publish to GitHub / Gitee automatically.
+
+## Project Layout
+
+- `main.py`: GUI entry point
+- `gui/`: desktop UI, overlay subtitles, on-screen hints, settings, voice picker, etc.
+- `app_core/controller.py`: microphone live-interpretation pipeline
+- `app_core/game_subtitle_controller.py`: system-audio subtitle pipeline
+- `app_core/typed_controller.py`: typed-translation pipeline
+- `app_core/audio_io.py` / `system_audio.py`: audio capture & WASAPI loopback
+- `core/hotkey.py`: global hotkeys / mouse side buttons
+- `core/usage_tracker.py`: usage tracking & billing
+- `core/update_checker.py`: auto-update
+- `scripts/`: CLI samples and diagnostic tools
 
 ## Notes
 
 - This project is a desktop translation and subtitle tool. It does not inject into games.
-- Bring your own API keys and any required proxy or service configuration.
+- Bring your own API keys and any required proxy or service configuration (or use the built-in trial).
