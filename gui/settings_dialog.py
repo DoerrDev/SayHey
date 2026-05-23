@@ -51,7 +51,7 @@ class _HotkeyCaptureEdit(QPushButton):
 
     def _refresh(self) -> None:
         if self._capturing:
-            self.setText("请按组合键…  (Esc 取消, Backspace 清除)")
+            self.setText("请按组合键或鼠标侧键…  (Esc 取消, Backspace 清除)")
         else:
             self.setText(format_hotkey(self._combo) if self._combo else "未绑定（点击设置）")
 
@@ -105,6 +105,27 @@ class _HotkeyCaptureEdit(QPushButton):
         self._combo = combo
         self._capturing = False
         self._refresh()
+
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if not self._capturing:
+            return super().mousePressEvent(event)
+        btn = event.button()
+        key_name = ""
+        if btn == Qt.MouseButton.XButton1:
+            key_name = "mouse4"
+        elif btn == Qt.MouseButton.XButton2:
+            key_name = "mouse5"
+        if not key_name:
+            return super().mousePressEvent(event)
+        mods = []
+        m = event.modifiers()
+        if m & Qt.KeyboardModifier.ControlModifier: mods.append("ctrl")
+        if m & Qt.KeyboardModifier.AltModifier: mods.append("alt")
+        if m & Qt.KeyboardModifier.ShiftModifier: mods.append("shift")
+        self._combo = "+".join(mods + [key_name])
+        self._capturing = False
+        self._refresh()
+        event.accept()
 
 
 VOLC_BILLING_DOC_URL = "https://www.volcengine.com/docs/6561/1359370?lang=zh"
@@ -401,7 +422,7 @@ class SettingsDialog(QDialog):
         form.addRow("开启/关闭 字幕", self._hk_subtitle)
 
         self._hk_si = _HotkeyCaptureEdit()
-        form.addRow("开启/关闭 同声传译", self._hk_si)
+        form.addRow("开启/关闭 麦克风", self._hk_si)
 
         self._hk_sim_checkbox = _HotkeyCaptureEdit()
         form.addRow("切换 麦克风直连/同声传译", self._hk_sim_checkbox)

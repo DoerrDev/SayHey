@@ -318,18 +318,25 @@ class MainWindow(QMainWindow):
             self._float_input.show_centered(self.screen())
 
     def _hk_toggle_subtitle(self) -> None:
-        self._toggle_overlay()
-        show_toast("字幕已开启" if self._overlay.isVisible() else "字幕已关闭")
+        running = self._game_thread is not None and self._game_thread.isRunning()
+        if running:
+            self._stop_game()
+            show_toast("字幕已关闭")
+        else:
+            self._start_game()
+            started = self._game_thread is not None and self._game_thread.isRunning()
+            if started:
+                show_toast("字幕已开启")
 
     def _hk_toggle_si(self) -> None:
         running = self._mic_thread is not None and self._mic_thread.isRunning()
         if running:
             self._stop_mic()
-            show_toast("同声传译已关闭")
+            show_toast("麦克风已关闭")
         else:
             self._start_mic()
             if self._mic_thread is not None:
-                show_toast("同声传译已开启")
+                show_toast("麦克风已开启")
 
     def _hk_toggle_sim_checkbox(self) -> None:
         cb = self._mic_panel._simultaneous_checkbox
