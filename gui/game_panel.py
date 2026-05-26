@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTextEdit,
     QVBoxLayout,
+    QWidget,
 )
 
 from gui.subtitle_buffer import SubtitleBuffer
@@ -112,8 +113,10 @@ class GameSubtitlePanel(QFrame):
         lang_row.addStretch()
         layout.addLayout(lang_row)
 
-        # Audio source row
-        audio_row = QHBoxLayout()
+        # Audio source row (hidden in simplified mode)
+        self._audio_row_widget = QWidget()
+        audio_row = QHBoxLayout(self._audio_row_widget)
+        audio_row.setContentsMargins(0, 0, 0, 0)
         audio_row.setSpacing(12)
         audio_label = QLabel("音频源")
         audio_label.setObjectName("sectionTitle")
@@ -128,7 +131,7 @@ class GameSubtitlePanel(QFrame):
             lambda _i: self.sig_audio_device_changed.emit(self.selected_audio_device())
         )
         audio_row.addWidget(self._audio_combo, 1)
-        layout.addLayout(audio_row)
+        layout.addWidget(self._audio_row_widget)
 
         # Constraint hint (shown when neither side is zh/en)
         self._lang_hint = QLabel("⚠ 源语言或字幕语言中，至少有一个需为中文或英语")
@@ -210,6 +213,9 @@ class GameSubtitlePanel(QFrame):
         else:
             self._audio_combo.setCurrentIndex(0)
         self._audio_combo.blockSignals(False)
+
+    def set_advanced(self, show: bool) -> None:
+        self._audio_row_widget.setVisible(show)
 
     @Slot()
     def _on_toggle(self) -> None:
