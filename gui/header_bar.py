@@ -28,6 +28,7 @@ class HeaderBar(QWidget):
     sig_open_settings = Signal()
     sig_open_usage = Signal()
     sig_open_feedback = Signal()
+    sig_advanced_toggled = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -109,6 +110,14 @@ class HeaderBar(QWidget):
         self._feedback_btn.clicked.connect(self.sig_open_feedback.emit)
         layout.addWidget(self._feedback_btn)
 
+        self._advanced_btn = QPushButton("高级")
+        self._advanced_btn.setObjectName("secondary")
+        self._advanced_btn.setCheckable(True)
+        self._advanced_btn.setFixedWidth(60)
+        self._advanced_btn.setToolTip("显示/隐藏高级音频设备选项")
+        self._advanced_btn.toggled.connect(self.sig_advanced_toggled.emit)
+        layout.addWidget(self._advanced_btn)
+
         settings_btn = QToolButton()
         settings_btn.setIcon(_icon("settings"))
         settings_btn.setToolTip("设置")
@@ -159,6 +168,11 @@ class HeaderBar(QWidget):
             QMessageBox.information(
                 self, "版本", f"当前版本 v{__version__}\n暂无可用更新"
             )
+
+    def set_advanced(self, show: bool) -> None:
+        self._advanced_btn.blockSignals(True)
+        self._advanced_btn.setChecked(show)
+        self._advanced_btn.blockSignals(False)
 
     def set_usage_visible(self, visible: bool) -> None:
         self._usage_chip.setVisible(visible)
