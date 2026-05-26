@@ -198,6 +198,12 @@ class MicTranslatePanel(QFrame):
             self._out_combo.addItem(self._device_label(device), device)
         if prev_out_index is not None:
             self.set_output_by_index(prev_out_index)
+        else:
+            try:
+                cable = self._resolver.resolve_cable_input()
+                self.set_output_by_index(cable.index)
+            except Exception:
+                pass
         self._out_combo.blockSignals(False)
 
     def _stable_logical_inputs(self) -> list[AudioDevice]:
