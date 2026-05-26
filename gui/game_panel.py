@@ -44,6 +44,27 @@ HUOSHAN_DIALECTS: list[tuple[str, str]] = [
     ("上海话 (Shanghai)", "sh-CN"),
 ]
 
+QWEN_LANGUAGES: list[tuple[str, str]] = [
+    ("中文 zh", "zh"),
+    ("英语 en", "en"),
+    ("日语 ja", "ja"),
+    ("韩语 ko", "ko"),
+    ("法语 fr", "fr"),
+    ("德语 de", "de"),
+    ("西班牙语 es", "es"),
+    ("葡萄牙语 pt", "pt"),
+    ("俄语 ru", "ru"),
+    ("意大利语 it", "it"),
+    ("印尼语 id", "id"),
+    ("越南语 vi", "vi"),
+    ("泰语 th", "th"),
+    ("阿拉伯语 ar", "ar"),
+    ("粵語 yue", "yue"),
+    ("印地语 hi", "hi"),
+    ("希腊语 el", "el"),
+    ("土耳其语 tr", "tr"),
+]
+
 _ZH_EN = {"zh", "en"}
 
 
@@ -189,6 +210,28 @@ class GameSubtitlePanel(QFrame):
         idx = self._tgt_combo.findData(code)
         if idx >= 0:
             self._tgt_combo.setCurrentIndex(idx)
+
+    def set_engine(self, engine: str) -> None:
+        cur_src = self._src_combo.currentData()
+        cur_tgt = self._tgt_combo.currentData()
+        langs = QWEN_LANGUAGES if engine == "qwen" else HUOSHAN_FOREIGN_LANGUAGES
+        self._src_combo.blockSignals(True)
+        self._tgt_combo.blockSignals(True)
+        self._src_combo.clear()
+        for name, code in langs:
+            self._src_combo.addItem(name, code)
+        if engine != "qwen":
+            for name, code in HUOSHAN_DIALECTS:
+                self._src_combo.addItem(name, code)
+        self._tgt_combo.clear()
+        for name, code in langs:
+            self._tgt_combo.addItem(name, code)
+        si = self._src_combo.findData(cur_src)
+        self._src_combo.setCurrentIndex(si if si >= 0 else max(0, self._src_combo.findData("en")))
+        ti = self._tgt_combo.findData(cur_tgt)
+        self._tgt_combo.setCurrentIndex(ti if ti >= 0 else max(0, self._tgt_combo.findData("zh")))
+        self._src_combo.blockSignals(False)
+        self._tgt_combo.blockSignals(False)
 
     def set_audio_devices(self, device_names: list[str], current: str = "") -> None:
         self._audio_combo.blockSignals(True)

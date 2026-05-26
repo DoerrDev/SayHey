@@ -7,6 +7,7 @@ from typing import Callable, Optional
 
 from app_core.audio_devices import DeviceResolver
 from app_core.audio_io import AudioOutputSink
+from app_core.qwen_engine import QwenMtConfig, QwenTtsConfig, qwen_mt_translate, qwen_tts_stream
 from app_core.typed_engine import (
     DoubaoTranslateConfig,
     DoubaoTtsConfig,
@@ -28,6 +29,9 @@ class TypedConfig:
     auto_tts: bool
     cable_input_name: str = "CABLE Input"
     sample_rate: int = 24000
+    engine_name: str = "huoshan"
+    qwen_mt: Optional[QwenMtConfig] = None
+    qwen_tts: Optional[QwenTtsConfig] = None
 
 
 class TypedTranslateController:
@@ -81,9 +85,15 @@ class TypedTranslateController:
         if not text:
             return
         self._emit(f"[typed] 翻译开始：{text[:60]}")
-        translated = doubao_translate_text(
-            self.cfg.translate, text, self.cfg.source_language, self.cfg.target_language, self._emit
-        )
+        if self.cfg.engine_name == "qwen":
+            mt = self.cfg.qwen_mt or QwenMtConfig(api_key="")
+            translated = qwen_mt_translate(
+                mt, text, self.cfg.source_language, self.cfg.target_language, self._emit
+            )
+        else:
+            translated = doubao_translate_text(
+                self.cfg.translate, text, self.cfg.source_language, self.cfg.target_language, self._emit
+            )
         self._emit(f"[typed] 翻译完成：{translated[:60]}")
         if self.on_result:
             self.on_result(text, translated)
@@ -95,5 +105,9 @@ class TypedTranslateController:
             if self._sink is not None:
                 self._sink.write(chunk)
 
-        asyncio.run(doubao_tts_stream(self.cfg.tts, translated, on_pcm, self._emit))
+        if self.cfg.engine_name == "qwen":
+            tts = self.cfg.qwen_tts or QwenTtsConfig(api_key="")
+            asyncio.run(qwen_tts_stream(tts, translated, on_pcm, self._emit))
+        else:
+            asyncio.run(doubao_tts_stream(self.cfg.tts, translated, on_pcm, self._emit))
         self._emit("[typed] TTS 完成")

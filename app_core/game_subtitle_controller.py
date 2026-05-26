@@ -10,6 +10,7 @@ from typing import Callable, Optional
 
 from app_core.controller import load_env_file
 from app_core.huoshan_s2t_engine import HuoshanS2TSubtitleEngine
+from app_core.qwen_engine import QwenLiveTranslateEngine
 from app_core.system_audio import SystemAudioCapture
 from app_core.translator import TranslatorConfig, TranslatorEvent
 
@@ -42,7 +43,7 @@ class GameSubtitleController:
         self.config = config
         self.on_status = on_status
         self.on_subtitle = on_subtitle
-        self.engine: Optional[HuoshanS2TSubtitleEngine] = None
+        self.engine = None
         self.capture: Optional[SystemAudioCapture] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.run_task: Optional[asyncio.Task] = None
@@ -56,11 +57,14 @@ class GameSubtitleController:
         self.loop = asyncio.get_running_loop()
         self.run_task = asyncio.current_task()
         try:
-            self.engine = HuoshanS2TSubtitleEngine(
-                ws_url=self.config.ws_url,
-                api_key=self.config.api_key,
-                resource_id=self.config.resource_id,
-            )
+            if self.config.engine_name == "qwen":
+                self.engine = QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2t")
+            else:
+                self.engine = HuoshanS2TSubtitleEngine(
+                    ws_url=self.config.ws_url,
+                    api_key=self.config.api_key,
+                    resource_id=self.config.resource_id,
+                )
             await self.engine.start(
                 TranslatorConfig(
                     source_language=self.config.source_language,
@@ -156,7 +160,13 @@ _DEFAULT_VOLC_WS_URL = "wss://openspeech.bytedance.com/api/v4/ast/v2/translate"
 
 def build_game_subtitle_config(env_path: Path) -> GameSubtitleConfig:
     load_env_file(env_path)
-    api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
+    engine_global = os.environ.get("TRANSLATOR_ENGINE", "huoshan").strip().lower()
+    if engine_global == "qwen":
+        api_key = os.environ.get("QWEN_API_KEY", "").strip()
+        engine_name = "qwen"
+    else:
+        api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
+        engine_name = os.environ.get("GAME_SUBTITLE_ENGINE", "huoshan_s2t").strip()
     return GameSubtitleConfig(
         ws_url=os.environ.get("VOLC_WS_URL", "").strip() or _DEFAULT_VOLC_WS_URL,
         api_key=api_key,
@@ -165,5 +175,5 @@ def build_game_subtitle_config(env_path: Path) -> GameSubtitleConfig:
         target_language=os.environ.get("GAME_SUBTITLE_TARGET_LANGUAGE", "zh").strip(),
         audio_device_name=os.environ.get("GAME_AUDIO_DEVICE_NAME", "").strip() or None,
         chunk_ms=int(os.environ.get("GAME_SUBTITLE_CHUNK_MS", "80").strip()),
-        engine_name=os.environ.get("GAME_SUBTITLE_ENGINE", "huoshan_s2t").strip(),
+        engine_name=engine_name,
     )

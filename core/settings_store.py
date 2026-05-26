@@ -58,6 +58,9 @@ class AppSettings:
     hotkey_typed_tts_toggle: str = ""
     show_advanced_panel: bool = False
     advanced_audio_warning_shown: bool = False
+    qwen_api_key: str = ""
+    qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    qwen_s2s_speaker_id: str = "Cherry"
 
 
 class SettingsStore:
@@ -134,7 +137,7 @@ class SettingsStore:
         )
 
     def _sync_to_environ(self, s: AppSettings) -> None:
-        use_trial = bool(s.volc_trial_enabled and s.volc_trial_token)
+        use_trial = bool(s.volc_trial_enabled and s.volc_trial_token) and s.translator_engine != "qwen"
         effective_api_key = s.volc_trial_token if use_trial else s.volc_api_key
         effective_ws_url = s.volc_trial_proxy_ws_url if use_trial else s.volc_ws_url
         overrides: dict[str, str] = {
@@ -147,6 +150,9 @@ class SettingsStore:
             "VB_CABLE_INPUT_NAME": s.vb_cable_input_name,
             "VB_CABLE_OUTPUT_NAME": s.vb_cable_output_name,
             "TRANSLATOR_ENGINE": s.translator_engine,
+            "QWEN_API_KEY": s.qwen_api_key,
+            "QWEN_BASE_URL": s.qwen_base_url,
+            "QWEN_S2S_SPEAKER_ID": s.qwen_s2s_speaker_id,
             "S2S_SOURCE_LANGUAGE": s.s2s_source_language,
             "S2S_TARGET_LANGUAGE": s.s2s_target_language,
             "S2S_SPEAKER_ID": s.s2s_speaker_id,

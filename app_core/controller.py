@@ -12,6 +12,7 @@ from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_audio
 from app_core.audio_io import AudioInputSource, AudioOutputSink, AudioRouteConfig
 from app_core.mock_engine import MockTranslatorEngine
 from app_core.translator import TranslatorConfig, TranslatorEvent
+from app_core.qwen_engine import QwenLiveTranslateEngine
 from app_core.volc_engine import VolcAstS2SEngine
 
 
@@ -198,6 +199,8 @@ class VoiceTranslatorController:
     def _build_engine(self):
         if self.config.engine_name == "mock":
             return MockTranslatorEngine()
+        if self.config.engine_name == "qwen":
+            return QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2s")
         return VolcAstS2SEngine(
             ws_url=self.config.ws_url,
             api_key=self.config.api_key,
@@ -312,10 +315,13 @@ def _env_int(name: str, default: Optional[int] = None) -> Optional[int]:
 def build_app_config(env_path: Path) -> AppConfig:
     load_env_file(env_path)
     current_dir = env_path.parent
-    api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
     engine_name = os.environ.get("TRANSLATOR_ENGINE", "huoshan").strip().lower()
     if engine_name == "volc":
         engine_name = "huoshan"
+    if engine_name == "qwen":
+        api_key = os.environ.get("QWEN_API_KEY", "").strip()
+    else:
+        api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
     sample_rate = int(os.environ.get("S2S_SAMPLE_RATE", "16000").strip())
     return AppConfig(
         ws_url=os.environ.get("VOLC_WS_URL", "").strip(),
@@ -333,7 +339,11 @@ def build_app_config(env_path: Path) -> AppConfig:
             record_translated_wav=os.environ.get("RECORD_TRANSLATED_WAV", "1").strip() not in {"0", "false", "False"},
         ),
         translated_record_dir=current_dir / os.environ.get("S2S_RECORD_DIR", "recordings_s2s").strip(),
-        speaker_id=os.environ.get("S2S_SPEAKER_ID", "").strip() or None,
+        speaker_id=(
+            os.environ.get("QWEN_S2S_SPEAKER_ID", "").strip() or "Cherry"
+            if engine_name == "qwen"
+            else (os.environ.get("S2S_SPEAKER_ID", "").strip() or None)
+        ),
         speech_rate=int(os.environ.get("S2S_SPEECH_RATE", "0").strip()),
         simultaneous_interpretation_enabled=os.environ.get(
             "MIC_SIMULTANEOUS_INTERPRETATION",

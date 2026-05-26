@@ -25,6 +25,87 @@ TYPED_LANGUAGES = [
     ("Português", "pt"),
     ("Русский", "ru"),
 ]
+TYPED_LANGUAGES_QWEN = [
+    ("中文", "zh"),
+    ("粤语 · 粵語", "yue"),
+    ("英语 · English", "en"),
+    ("日语 · 日本語", "ja"),
+    ("韩语 · 한국어", "ko"),
+    ("法语 · Français", "fr"),
+    ("德语 · Deutsch", "de"),
+    ("西班牙语 · Español", "es"),
+    ("葡萄牙语 · Português", "pt"),
+    ("意大利语 · Italiano", "it"),
+    ("俄语 · Русский", "ru"),
+    ("荷兰语 · Nederlands", "nl"),
+    ("波兰语 · Polski", "pl"),
+    ("土耳其语 · Türkçe", "tr"),
+    ("阿拉伯语 · العربية", "ar"),
+    ("希伯来语 · עברית", "he"),
+    ("波斯语 · فارسی", "fa"),
+    ("乌尔都语 · اردو", "ur"),
+    ("印地语 · हिन्दी", "hi"),
+    ("孟加拉语 · বাংলা", "bn"),
+    ("泰米尔语 · தமிழ்", "ta"),
+    ("泰卢固语 · తెలుగు", "te"),
+    ("马拉地语 · मराठी", "mr"),
+    ("古吉拉特语 · ગુજરાતી", "gu"),
+    ("卡纳达语 · ಕನ್ನಡ", "kn"),
+    ("马拉雅拉姆语 · മലയാളം", "ml"),
+    ("旁遮普语 · ਪੰਜਾਬੀ", "pa"),
+    ("泰语 · ไทย", "th"),
+    ("越南语 · Tiếng Việt", "vi"),
+    ("印尼语 · Bahasa Indonesia", "id"),
+    ("马来语 · Bahasa Melayu", "ms"),
+    ("菲律宾语 · Filipino", "tl"),
+    ("高棉语 · ខ្មែរ", "km"),
+    ("老挝语 · ລາວ", "lo"),
+    ("缅甸语 · မြန်မာ", "my"),
+    ("希腊语 · Ελληνικά", "el"),
+    ("匈牙利语 · Magyar", "hu"),
+    ("捷克语 · Čeština", "cs"),
+    ("斯洛伐克语 · Slovenčina", "sk"),
+    ("斯洛文尼亚语 · Slovenščina", "sl"),
+    ("罗马尼亚语 · Română", "ro"),
+    ("保加利亚语 · Български", "bg"),
+    ("乌克兰语 · Українська", "uk"),
+    ("克罗地亚语 · Hrvatski", "hr"),
+    ("塞尔维亚语 · Srpski", "sr"),
+    ("瑞典语 · Svenska", "sv"),
+    ("挪威语 · Norsk", "no"),
+    ("丹麦语 · Dansk", "da"),
+    ("芬兰语 · Suomi", "fi"),
+    ("冰岛语 · Íslenska", "is"),
+    ("爱沙尼亚语 · Eesti", "et"),
+    ("拉脱维亚语 · Latviešu", "lv"),
+    ("立陶宛语 · Lietuvių", "lt"),
+    ("加泰罗尼亚语 · Català", "ca"),
+    ("加利西亚语 · Galego", "gl"),
+    ("巴斯克语 · Euskara", "eu"),
+    ("威尔士语 · Cymraeg", "cy"),
+    ("爱尔兰语 · Gaeilge", "ga"),
+    ("马耳他语 · Malti", "mt"),
+    ("阿尔巴尼亚语 · Shqip", "sq"),
+    ("马其顿语 · Македонски", "mk"),
+    ("波斯尼亚语 · Bosanski", "bs"),
+    ("亚美尼亚语 · Հայերեն", "hy"),
+    ("格鲁吉亚语 · ქართული", "ka"),
+    ("阿塞拜疆语 · Azərbaycan", "az"),
+    ("哈萨克语 · Қазақ", "kk"),
+    ("吉尔吉斯语 · Кыргыз", "ky"),
+    ("乌兹别克语 · Oʻzbek", "uz"),
+    ("蒙古语 · Монгол", "mn"),
+    ("尼泊尔语 · नेपाली", "ne"),
+    ("僧伽罗语 · සිංහල", "si"),
+    ("斯瓦希里语 · Swahili", "sw"),
+    ("南非荷兰语 · Afrikaans", "af"),
+    ("祖鲁语 · isiZulu", "zu"),
+    ("阿姆哈拉语 · አማርኛ", "am"),
+    ("普什图语 · Pashto", "ps"),
+    ("库尔德语 · Kurdî", "ku"),
+    ("世界语 · Esperanto", "eo"),
+    ("拉丁语 · Latina", "la"),
+]
 TYPED_SOURCE_LANGUAGES = [("自动检测", "auto")] + TYPED_LANGUAGES
 
 
@@ -157,6 +238,26 @@ class TypedTranslatePanel(QFrame):
 
     def set_auto_tts(self, on: bool) -> None:
         self._auto_tts.setChecked(on)
+
+    def set_engine(self, engine: str) -> None:
+        cur_src = self._src.currentData()
+        cur_tgt = self._tgt.currentData()
+        langs = TYPED_LANGUAGES_QWEN if engine == "qwen" else TYPED_LANGUAGES
+        src_langs = [("自动检测", "auto")] + langs
+        self._src.blockSignals(True)
+        self._tgt.blockSignals(True)
+        self._src.clear()
+        for name, code in src_langs:
+            self._src.addItem(f"{name} ({code})", code)
+        self._tgt.clear()
+        for name, code in langs:
+            self._tgt.addItem(f"{name} ({code})", code)
+        si = self._src.findData(cur_src)
+        self._src.setCurrentIndex(si if si >= 0 else 0)
+        ti = self._tgt.findData(cur_tgt)
+        self._tgt.setCurrentIndex(ti if ti >= 0 else 0)
+        self._src.blockSignals(False)
+        self._tgt.blockSignals(False)
 
     def show_result(self, source: str, translated: str) -> None:
         self._source_lbl.setText(source)

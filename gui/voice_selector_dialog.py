@@ -95,6 +95,25 @@ def load_voices() -> list[Voice]:
     return voices
 
 
+def load_qwen_voices() -> list[Voice]:
+    from app_core.qwen_voices import QWEN_VOICES
+    out: list[Voice] = []
+    for v in QWEN_VOICES:
+        gender = "女" if v.gender == "female" else "男"
+        out.append(Voice(
+            voice_type=v.voice_id,
+            name=v.display_name,
+            gender=gender,
+            age="",
+            description=f"Qwen 官方音色 · 支持 {v.language}",
+            emoji="🎙️",
+            trial_url="",
+            languages=["zh-cn", "en"],
+            is_s2s=True,
+        ))
+    return out
+
+
 class _Chip(QPushButton):
     def __init__(self, text: str, parent=None) -> None:
         super().__init__(text, parent)
@@ -107,9 +126,10 @@ class VoiceRow(QFrame):
     clicked = Signal(str)
     preview = Signal(str, str)
 
-    def __init__(self, voice: Voice, parent=None) -> None:
+    def __init__(self, voice: Voice, parent=None, force_playable: bool = False) -> None:
         super().__init__(parent)
         self.voice = voice
+        self._force_playable = force_playable
         self.setObjectName("voiceCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._build_ui()
@@ -167,7 +187,7 @@ class VoiceRow(QFrame):
         self._play_btn = QPushButton("▶ 试听")
         self._play_btn.setObjectName("voicePlayBtn")
         self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._play_btn.setEnabled(bool(self.voice.trial_url))
+        self._play_btn.setEnabled(bool(self.voice.trial_url) or self._force_playable)
         self._play_btn.clicked.connect(self._on_play_clicked)
         outer.addWidget(self._play_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
@@ -194,7 +214,7 @@ class VoiceRow(QFrame):
 class VoiceSelectorDialog(QDialog):
     voice_selected = Signal(str)
 
-    def __init__(self, current_voice: str = "", parent=None) -> None:
+    def __init__(self, current_voice: str = "", parent=None, engine: str = "huoshan", qwen_api_key: str = "") -> None:
         super().__init__(parent)
         self.setWindowFlags(
             (self.windowFlags() & ~Qt.WindowType.FramelessWindowHint)
@@ -207,7 +227,11 @@ class VoiceSelectorDialog(QDialog):
         self.setModal(False)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setMinimumSize(960, 720)
-        self._voices = load_voices()
+        self._engine = engine
+        self._qwen_api_key = qwen_api_key
+        self._voices = load_qwen_voices() if engine == "qwen" else load_voices()
+        self._tts_thread = None
+        self._tts_temp_path = None
         self._current_voice = current_voice
         self._rows: list[VoiceRow] = []
         self._search = QLineEdit()
@@ -239,7 +263,12 @@ class VoiceSelectorDialog(QDialog):
         root.setSpacing(0)
 
         # Subtitle hint (title now shown by native window title bar)
-        subtitle = QLabel("数据来源 seed-tts-2.0；标有「同传可用」的两个音色可用于同声传译，其余仅打字翻译。")
+        sub_text = (
+            "Qwen 官方音色，全部可用于同声传译；支持中英为主，部分音色覆盖多语种。"
+            if self._engine == "qwen"
+            else "数据来源 seed-tts-2.0；标有「同传可用」的两个音色可用于同声传译，其余仅打字翻译。"
+        )
+        subtitle = QLabel(sub_text)
         subtitle.setObjectName("voiceDialogSubtitle")
         subtitle.setWordWrap(True)
         subtitle.setContentsMargins(20, 14, 20, 8)
@@ -367,7 +396,7 @@ class VoiceSelectorDialog(QDialog):
             return
 
         for voice in matches:
-            row = VoiceRow(voice)
+            row = VoiceRow(voice, force_playable=(self._engine == "qwen"))
             row.clicked.connect(self._select_voice)
             row.preview.connect(self._on_preview)
             row.set_selected(voice.voice_type == self._current_voice)
@@ -402,14 +431,58 @@ class VoiceSelectorDialog(QDialog):
         if self._playing_voice == voice_type:
             self._stop_preview()
             return
-        if not url:
+        if url:
+            self._stop_preview()
+            self._playing_voice = voice_type
+            self._player.setSource(QUrl(url))
+            self._player.play()
+            for row in self._rows:
+                row.set_playing(row.voice.voice_type == voice_type)
+            return
+        if self._engine == "qwen":
+            self._preview_qwen(voice_type)
+
+    def _preview_qwen(self, voice_type: str) -> None:
+        if not self._qwen_api_key:
             return
         self._stop_preview()
         self._playing_voice = voice_type
-        self._player.setSource(QUrl(url))
-        self._player.play()
         for row in self._rows:
             row.set_playing(row.voice.voice_type == voice_type)
+        import asyncio, tempfile, threading, wave
+        from app_core.qwen_engine import QwenTtsConfig, qwen_tts_stream
+
+        api_key = self._qwen_api_key
+        sample_text = "你好，这是 Qwen 音色试听。Hello, this is a voice preview."
+
+        def worker() -> None:
+            buf = bytearray()
+            def on_pcm(b: bytes) -> None:
+                buf.extend(b)
+            try:
+                asyncio.run(qwen_tts_stream(QwenTtsConfig(api_key=api_key, voice=voice_type), sample_text, on_pcm))
+            except Exception:
+                return
+            if not buf:
+                return
+            tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+            tmp.close()
+            with wave.open(tmp.name, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(24000)
+                w.writeframes(bytes(buf))
+            self._tts_temp_path = tmp.name
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(0, lambda: self._play_wav(tmp.name, voice_type))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _play_wav(self, path: str, voice_type: str) -> None:
+        if self._playing_voice != voice_type:
+            return
+        self._player.setSource(QUrl.fromLocalFile(path))
+        self._player.play()
 
     def _stop_preview(self) -> None:
         if self._player.playbackState() != QMediaPlayer.PlaybackState.StoppedState:

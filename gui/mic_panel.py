@@ -32,9 +32,30 @@ HUOSHAN_LANGUAGES = [
     ("German", "de"),
     ("French", "fr"),
 ]
+QWEN_LANGUAGES = [
+    ("中文", "zh"),
+    ("英语 · English", "en"),
+    ("日语 · 日本語", "ja"),
+    ("韩语 · 한국어", "ko"),
+    ("法语 · Français", "fr"),
+    ("德语 · Deutsch", "de"),
+    ("西班牙语 · Español", "es"),
+    ("俄语 · Русский", "ru"),
+    ("意大利语 · Italiano", "it"),
+    ("葡萄牙语 · Português", "pt"),
+    ("阿拉伯语 · العربية", "ar"),
+    ("泰语 · ไทย", "th"),
+    ("越南语 · Tiếng Việt", "vi"),
+    ("印尼语 · Bahasa Indonesia", "id"),
+    ("粤语 · 粵語", "yue"),
+    ("印地语 · हिन्दी", "hi"),
+    ("希腊语 · Ελληνικά", "el"),
+    ("土耳其语 · Türkçe", "tr"),
+]
 LANGUAGES_BY_ENGINE: dict[str, list[tuple[str, str]]] = {
     "huoshan": HUOSHAN_LANGUAGES,
     "mock": HUOSHAN_LANGUAGES,
+    "qwen": QWEN_LANGUAGES,
 }
 
 
@@ -108,7 +129,7 @@ class MicTranslatePanel(QFrame):
 
         # Engine (hidden — kept for state; configure via settings dialog)
         self._engine_combo = QComboBox()
-        self._engine_combo.addItems(["huoshan", "mock"])
+        self._engine_combo.addItems(["huoshan", "qwen", "mock"])
         self._engine_combo.currentTextChanged.connect(self._on_engine_changed)
         self._engine_combo.setVisible(False)
 
@@ -318,6 +339,8 @@ class MicTranslatePanel(QFrame):
         self._enforce_s2s_voice_constraint()
 
     def _enforce_s2s_voice_constraint(self) -> None:
+        if self._engine_combo.currentText() == "qwen":
+            return
         if self._speaker_id not in S2S_VOICE_TYPES:
             return
         target = self.selected_target_language()

@@ -18,9 +18,11 @@ PRICE_PER_MTOKEN = {
     "output_audio_tokens": 300.0,
     "output_text_tokens": 30.0,
     "tts_chars": 300.0,
+    "qwen_mt_input_tokens": 4.0,
+    "qwen_mt_output_tokens": 12.0,
 }
 
-_USAGE_RE = re.compile(r"\[(?:game-s2t-usage|usage|mt-usage|tts-usage)\]\s*(\{.*\})\s*$")
+_USAGE_RE = re.compile(r"\[(?:game-s2t-usage|usage|mt-usage|tts-usage|qwen-mt-usage)\]\s*(\{.*\})\s*$")
 
 
 @dataclass
@@ -66,7 +68,9 @@ def parse_usage_line(line: str) -> Optional[tuple[str, dict]]:
             data = json.loads(payload)
         except Exception:
             return None
-    if "game-s2t-usage" in line:
+    if "qwen-mt-usage" in line:
+        source = "qwen-mt"
+    elif "game-s2t-usage" in line:
         source = "game"
     elif "mt-usage" in line:
         source = "mt"
@@ -78,10 +82,29 @@ def parse_usage_line(line: str) -> Optional[tuple[str, dict]]:
 
 
 def extract_event(source: str, data: dict) -> Optional[UsageEvent]:
+    tokens: dict[str, float] = {}
+    duration = 0
+    if source == "qwen-mt":
+        in_tok = data.get("input_tokens") or data.get("prompt_tokens") or 0
+        out_tok = data.get("output_tokens") or data.get("completion_tokens") or 0
+        if in_tok:
+            tokens["qwen_mt_input_tokens"] = float(in_tok)
+        if out_tok:
+            tokens["qwen_mt_output_tokens"] = float(out_tok)
+        if not tokens:
+            return None
+        cost = calc_cost(tokens)
+        return UsageEvent(
+            ts=datetime.now().isoformat(timespec="seconds"),
+            source=source,
+            session_id="",
+            duration_ms=0,
+            tokens=tokens,
+            cost=cost,
+        )
     meta = data.get("response_meta") or {}
     billing = meta.get("Billing") or {}
     items = billing.get("Items") or []
-    tokens: dict[str, float] = {}
     for item in items:
         unit = item.get("Unit")
         qty = item.get("Quantity")

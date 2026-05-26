@@ -218,9 +218,15 @@ class SettingsDialog(QDialog):
         self._tabs = QTabWidget()
         root.addWidget(self._tabs, 1)
 
-        self._tabs.addTab(self._build_volc_tab(), _icon("mountain"), " 火山引擎")
-        self._tabs.addTab(self._build_billing_tab(), _icon("wallet"), " AI 模型与费用")
-        self._tabs.addTab(self._build_volc_trial_tab(), _icon("gift"), " 火山引擎试用")
+        self._engine_value = "huoshan"
+        self._volc_tab = self._build_volc_tab()
+        self._qwen_tab = self._build_qwen_tab()
+        self._billing_tab = self._build_billing_tab()
+        self._trial_tab = self._build_volc_trial_tab()
+        self._tabs.addTab(self._volc_tab, _icon("mountain"), " 火山引擎")
+        self._tabs.addTab(self._qwen_tab, _icon("sparkles"), " Qwen")
+        self._tabs.addTab(self._billing_tab, _icon("wallet"), " AI 模型与费用")
+        self._tabs.addTab(self._trial_tab, _icon("gift"), " 火山引擎试用")
         self._tabs.addTab(self._build_overlay_tab(), _icon("captions"), " 字幕外观")
         self._tabs.addTab(self._build_hotkeys_tab(), _icon("settings"), " 快捷键")
         self._tabs.addTab(self._build_usage_tab(), _icon("bar-chart-3"), " 用量统计")
@@ -244,6 +250,12 @@ class SettingsDialog(QDialog):
         form.setContentsMargins(20, 20, 20, 20)
         form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._volc_enable_btn = QPushButton()
+        self._volc_enable_btn.setObjectName("secondary")
+        self._volc_enable_btn.setCheckable(True)
+        self._volc_enable_btn.clicked.connect(lambda: self._set_engine("huoshan"))
+        form.addRow("当前引擎", self._volc_enable_btn)
 
         key_row = QHBoxLayout()
         self._volc_api_key = _password_line()
@@ -274,6 +286,87 @@ class SettingsDialog(QDialog):
         form.addRow("", permission_note)
 
         return w
+
+    def _build_qwen_tab(self) -> QWidget:
+        w = self._tab_widget()
+        form = QFormLayout(w)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._qwen_enable_btn = QPushButton()
+        self._qwen_enable_btn.setObjectName("secondary")
+        self._qwen_enable_btn.setCheckable(True)
+        self._qwen_enable_btn.clicked.connect(lambda: self._set_engine("qwen"))
+        form.addRow("当前引擎", self._qwen_enable_btn)
+
+        key_row = QHBoxLayout()
+        self._qwen_api_key = _password_line()
+        self._qwen_api_key.setPlaceholderText("sk-xxxx（阿里云百炼 DashScope API Key）")
+        key_row.addWidget(self._qwen_api_key, 1)
+        get_qkey_btn = QPushButton("获取 Key")
+        get_qkey_btn.setObjectName("secondary")
+        get_qkey_btn.clicked.connect(self._open_qwen_key_page)
+        key_row.addWidget(get_qkey_btn)
+        self._qwen_test_btn = QPushButton("测试连通")
+        self._qwen_test_btn.setObjectName("secondary")
+        self._qwen_test_btn.clicked.connect(self._test_qwen_key)
+        key_row.addWidget(self._qwen_test_btn)
+        form.addRow("API Key", key_row)
+
+        self._qwen_base_url = QLineEdit()
+        self._qwen_base_url.setPlaceholderText("https://dashscope.aliyuncs.com/api/v1")
+        form.addRow("Base URL", self._qwen_base_url)
+
+        note = QLabel(
+            "启用 Qwen 后，三条管线（同传 / 字幕 / 打字翻译）将统一走 "
+            "qwen3-livetranslate-flash-realtime + qwen-mt-turbo。\n"
+            "Qwen 模式下：试用代理不可用、网络代理不生效、计费 chip 隐藏。"
+        )
+        note.setObjectName("routeLabel")
+        note.setWordWrap(True)
+        form.addRow("", note)
+
+        return w
+
+    def _set_engine(self, engine: str) -> None:
+        self._engine_value = engine
+        self._refresh_engine_buttons()
+
+    def _refresh_engine_buttons(self) -> None:
+        for btn, key in ((self._volc_enable_btn, "huoshan"), (self._qwen_enable_btn, "qwen")):
+            on = self._engine_value == key
+            btn.setChecked(on)
+            btn.setText("✓ 已启用（当前引擎）" if on else "启用此引擎")
+        is_qwen = self._engine_value == "qwen"
+        for tab in (self._billing_tab, self._trial_tab):
+            idx = self._tabs.indexOf(tab)
+            if idx >= 0:
+                self._tabs.setTabVisible(idx, not is_qwen)
+
+    def _test_qwen_key(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+        key = self._qwen_api_key.text().strip()
+        base = self._qwen_base_url.text().strip() or "https://dashscope.aliyuncs.com/api/v1"
+        if not key:
+            QMessageBox.warning(self, "Qwen 测试", "请先填入 API Key")
+            return
+        self._qwen_test_btn.setEnabled(False)
+        self._qwen_test_btn.setText("测试中…")
+        try:
+            from app_core.qwen_engine import QwenMtConfig, qwen_mt_translate
+            out = qwen_mt_translate(QwenMtConfig(api_key=key, base_url=base), "hello", "en", "zh")
+            QMessageBox.information(self, "Qwen 测试", f"连通成功，译文：{out}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Qwen 测试", f"失败：{exc}")
+        finally:
+            self._qwen_test_btn.setEnabled(True)
+            self._qwen_test_btn.setText("测试连通")
+
+    def _open_qwen_key_page(self) -> None:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl("https://bailian.console.aliyun.com/?apiKey=1#/api-key"))
 
     def _build_billing_tab(self) -> QWidget:
         w = self._tab_widget()
@@ -555,6 +648,10 @@ class SettingsDialog(QDialog):
         self._volc_api_key.setText(s.volc_api_key)
         self._volc_resource_id.setText(s.volc_resource_id)
         self._volc_ws_url.setText(s.volc_ws_url)
+        self._qwen_api_key.setText(s.qwen_api_key)
+        self._qwen_base_url.setText(s.qwen_base_url)
+        self._engine_value = "qwen" if s.translator_engine == "qwen" else "huoshan"
+        self._refresh_engine_buttons()
 
         self._overlay_max_lines.setValue(s.overlay_max_lines)
         self._overlay_font_size.setValue(s.overlay_font_size)
@@ -592,6 +689,9 @@ class SettingsDialog(QDialog):
             volc_api_key=self._volc_api_key.text().strip(),
             volc_resource_id=self._volc_resource_id.text().strip() or s.volc_resource_id,
             volc_ws_url=self._volc_ws_url.text().strip() or s.volc_ws_url,
+            translator_engine=self._engine_value,
+            qwen_api_key=self._qwen_api_key.text().strip(),
+            qwen_base_url=self._qwen_base_url.text().strip() or s.qwen_base_url,
             overlay_max_lines=self._overlay_max_lines.value(),
             overlay_font_size=self._overlay_font_size.value(),
             overlay_opacity=self._overlay_opacity.value() / 100.0,
@@ -617,6 +717,16 @@ class SettingsDialog(QDialog):
     def _on_save(self) -> None:
         settings = self._collect()
         has_trial = settings.volc_trial_enabled and settings.volc_trial_token
+        if settings.translator_engine == "qwen" and not settings.qwen_api_key:
+            reply = QMessageBox.question(
+                self,
+                "Qwen API Key 未填写",
+                "已启用 Qwen 引擎但未填写 API Key，启动同传/字幕时将失败。\n确认保存吗？",
+                QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if reply != QMessageBox.StandardButton.Save:
+                return
         if not settings.volc_api_key and not has_trial and settings.translator_engine == "huoshan":
             reply = QMessageBox.question(
                 self,

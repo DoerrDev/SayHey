@@ -33,6 +33,7 @@ from core.hotkey import HotkeyManager, format_hotkey
 from gui.toast import show_toast
 from app_core.typed_engine import DoubaoTranslateConfig, DoubaoTtsConfig, resolve_doubao_tts_speaker
 from app_core.typed_controller import TypedTranslateController, TypedConfig
+from app_core.qwen_engine import QwenMtConfig, QwenTtsConfig
 from core.bridge import TypedTranslateThread
 from gui.feedback_dialog import FeedbackDialog
 from gui.settings_dialog import SettingsDialog
@@ -69,6 +70,7 @@ class MainWindow(QMainWindow):
         self._mic_thread: Optional[ControllerThread] = None
         self._restart_mic_after_stop: bool = False
         self._game_thread: Optional[GameSubtitleThread] = None
+        self._last_engine: str = store.get().translator_engine
         self._overlay_visible = False
         usage_path = _ENV_PATH.parent / "usage_data.json"
         self._usage_tracker = UsageTracker(
@@ -256,6 +258,9 @@ class MainWindow(QMainWindow):
             target_language=self._typed_panel.selected_target(),
             auto_tts=self._typed_panel.auto_tts(),
             cable_input_name=s.vb_cable_input_name,
+            engine_name=s.translator_engine,
+            qwen_mt=QwenMtConfig(api_key=s.qwen_api_key, base_url=s.qwen_base_url),
+            qwen_tts=QwenTtsConfig(api_key=s.qwen_api_key, voice=s.qwen_s2s_speaker_id or "Cherry"),
         )
         if self._typed_controller is None:
             self._typed_controller = TypedTranslateController(cfg)
@@ -374,17 +379,20 @@ class MainWindow(QMainWindow):
         show_toast("打字翻译语音合成已开启" if new_state else "打字翻译语音合成已关闭")
 
     def _apply_settings(self, s: AppSettings) -> None:
-        self._header.set_usage_visible(s.usage_tracking_enabled)
+        is_qwen = s.translator_engine == "qwen"
+        self._header.set_usage_visible(s.usage_tracking_enabled and not is_qwen)
         self._header.set_usage_mode(s.usage_chip_show_token)
-        if s.usage_tracking_enabled:
+        if s.usage_tracking_enabled and not is_qwen:
             st = self._usage_tracker.state
             self._header.set_usage(st.session_cost, st.total_cost, st.session_tokens, st.total_tokens)
         self._mic_panel.set_mic_by_index(s.mic_input_index)
         self._mic_panel.set_output_by_index(s.mic_output_index)
         self._mic_panel.set_engine(s.translator_engine)
+        self._game_panel.set_engine(s.translator_engine)
+        self._typed_panel.set_engine(s.translator_engine)
         self._mic_panel.set_source_language(s.s2s_source_language)
         self._mic_panel.set_target_language(s.s2s_target_language)
-        self._mic_panel.set_speaker_id(s.s2s_speaker_id)
+        self._mic_panel.set_speaker_id(s.qwen_s2s_speaker_id if is_qwen else s.s2s_speaker_id)
         self._mic_panel.set_simultaneous_interpretation_enabled(s.mic_simultaneous_interpretation_enabled)
         self._mic_panel.set_speech_rate(s.s2s_speech_rate)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
@@ -664,9 +672,22 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _open_voice_selector(self) -> None:
+        engine = self._store.get().translator_engine
         dlg = getattr(self, "_voice_dlg", None)
+        if dlg is not None and getattr(dlg, "_engine", "huoshan") != engine:
+            try:
+                dlg.close()
+            except Exception:
+                pass
+            dlg = None
+            self._voice_dlg = None
         if dlg is None:
-            dlg = VoiceSelectorDialog(self._mic_panel.selected_speaker_id(), parent=self)
+            dlg = VoiceSelectorDialog(
+                self._mic_panel.selected_speaker_id(),
+                parent=self,
+                engine=engine,
+                qwen_api_key=self._store.get().qwen_api_key,
+            )
             dlg.voice_selected.connect(self._on_voice_selected)
             self._voice_dlg = dlg
         else:
@@ -680,14 +701,28 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_voice_selected(self, speaker_id: str) -> None:
         self._mic_panel.set_speaker_id(speaker_id)
-        self._store.save(replace(self._store.get(), s2s_speaker_id=speaker_id))
-        self._log_panel.append(f"火山音色已选择: {speaker_id or '服务默认音色'}")
+        cur = self._store.get()
+        if cur.translator_engine == "qwen":
+            self._store.save(replace(cur, qwen_s2s_speaker_id=speaker_id or "Cherry"))
+            self._log_panel.append(f"Qwen 音色已选择: {speaker_id or 'Cherry'}")
+        else:
+            self._store.save(replace(cur, s2s_speaker_id=speaker_id))
+            self._log_panel.append(f"火山音色已选择: {speaker_id or '服务默认音色'}")
 
     @Slot(object)
     def _on_settings_saved(self, s: object) -> None:
         from core.settings_store import AppSettings
         if not isinstance(s, AppSettings):
             return
+        prev_engine = getattr(self, "_last_engine", "huoshan")
+        if prev_engine != s.translator_engine:
+            if self._mic_thread and self._mic_thread.isRunning():
+                self._mic_thread.request_stop()
+                self._log_panel.append(f"引擎切换 {prev_engine}→{s.translator_engine}：已停止同传")
+            if self._game_thread and self._game_thread.isRunning():
+                self._game_thread.request_stop()
+                self._log_panel.append(f"引擎切换 {prev_engine}→{s.translator_engine}：已停止游戏字幕")
+        self._last_engine = s.translator_engine
         self._apply_settings(s)
         self._header.set_status("设置已保存", "normal")
         self._log_panel.append("设置已保存")
