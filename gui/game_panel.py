@@ -165,6 +165,8 @@ class GameSubtitlePanel(QFrame):
         # Wire language change events
         self._src_combo.currentIndexChanged.connect(self._on_lang_changed)
         self._tgt_combo.currentIndexChanged.connect(self._on_lang_changed)
+        self._src_combo.activated.connect(self._check_zh_to_zh)
+        self._tgt_combo.activated.connect(self._check_zh_to_zh)
         self._on_lang_changed()
 
     @Slot()
@@ -178,7 +180,8 @@ class GameSubtitlePanel(QFrame):
         self._lang_hint.setVisible(not constraint_ok)
         if not self._is_running:
             self._toggle_btn.setEnabled(constraint_ok)
-        if src == "zh" and tgt == "zh":
+    def _check_zh_to_zh(self) -> None:
+        if (self._src_combo.currentData() or "") == "zh" and (self._tgt_combo.currentData() or "") == "zh":
             self.sig_zh_to_zh_selected.emit()
 
     def selected_source_language(self) -> str:

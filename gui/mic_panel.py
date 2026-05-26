@@ -152,8 +152,8 @@ class MicTranslatePanel(QFrame):
         layout.addLayout(lang_row)
         self._populate_language_combos("huoshan")
         self._tgt_lang_combo.currentIndexChanged.connect(self._enforce_s2s_voice_constraint)
-        self._src_lang_combo.currentIndexChanged.connect(self._check_zh_to_zh)
-        self._tgt_lang_combo.currentIndexChanged.connect(self._check_zh_to_zh)
+        self._src_lang_combo.activated.connect(self._check_zh_to_zh)
+        self._tgt_lang_combo.activated.connect(self._check_zh_to_zh)
 
         # Source text (single-line compact)
         self._source_edit = QLabel("")

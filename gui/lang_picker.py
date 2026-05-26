@@ -49,6 +49,7 @@ COMMON_CODES = ["zh", "en", "ja", "ko", "fr", "de", "es", "ru", "ar", "pt"]
 
 class LangPicker(QPushButton):
     currentIndexChanged = Signal(int)
+    activated = Signal(int)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -126,8 +127,10 @@ class LangPicker(QPushButton):
         dlg = LangPickerDialog(self._items, self._idx, self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             idx = dlg.selected_index()
-            if idx >= 0 and idx != self._idx:
-                self.setCurrentIndex(idx)
+            if idx >= 0:
+                if idx != self._idx:
+                    self.setCurrentIndex(idx)
+                self.activated.emit(idx)
 
 
 class LangPickerDialog(QDialog):

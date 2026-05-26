@@ -11,6 +11,7 @@ class QwenVoice:
     language: str
     preview_url: str = ""
     description: str = ""
+    is_s2s: bool = True
 
 
 QWEN_VOICES: list[QwenVoice] = [
@@ -61,6 +62,29 @@ QWEN_VOICES: list[QwenVoice] = [
     QwenVoice("Sigga", "海娜 Sigga", "female", "多语种", description="冰岛小镇的知性女青年"),
     QwenVoice("Bea", "雅娜 Bea", "female", "多语种", description="爱喝咖啡的菲律宾甜甜小姐姐"),
     QwenVoice("Chloe", "思怡 Chloe", "female", "多语种", description="马来西亚白领女生"),
+    QwenVoice("Cherry", "芊悦 Cherry", "female", "中英双语", description="标准普通话，温柔甜美", is_s2s=False),
+    QwenVoice("Chelsie", "千雪 Chelsie", "female", "中英双语", description="标准普通话，清澈灵动", is_s2s=False),
+    QwenVoice("Dylan", "北京-晓东 Dylan", "male", "中英+北京话", description="地道京腔，京味儿十足", is_s2s=False),
+    QwenVoice("Jada", "上海-阿珍 Jada", "female", "中英+上海话", description="嗲嗲沪语，吴侬软语", is_s2s=False),
+    QwenVoice("Sunny", "四川-Sunny", "female", "中英+四川话", description="安逸川普，巴适得很", is_s2s=False),
+    QwenVoice("Vivian", "十三 Vivian", "female", "多语种", description="知性大方", is_s2s=False),
+    QwenVoice("Moon", "月白 Moon", "female", "多语种", description="清冷雅致，月色般静谧", is_s2s=False),
+    QwenVoice("Kai", "凯 Kai", "male", "多语种", description="干净阳光的少年音", is_s2s=False),
+    QwenVoice("Nofish", "不吃鱼 Nofish", "male", "多语种", description="慵懒佛系小哥", is_s2s=False),
+    QwenVoice("Bella", "萌宝 Bella", "female", "多语种", description="奶声奶气小萌娃", is_s2s=False),
+    QwenVoice("Eldric Sage", "沧明子 Eldric Sage", "male", "多语种", description="苍老沧桑的世外高人", is_s2s=False),
+    QwenVoice("Mochi", "沙小弥 Mochi", "male", "多语种", description="憨态可掬的小沙弥", is_s2s=False),
+    QwenVoice("Bellona", "燕铮莺 Bellona", "female", "多语种", description="飒爽英姿的女将", is_s2s=False),
+    QwenVoice("Vincent", "田叔 Vincent", "male", "多语种", description="憨厚朴实的中年大叔", is_s2s=False),
+    QwenVoice("Bunny", "萌小姬 Bunny", "female", "多语种", description="软萌可爱的小妹妹", is_s2s=False),
+    QwenVoice("Neil", "阿闻 Neil", "male", "多语种", description="书卷气十足的文艺青年", is_s2s=False),
+    QwenVoice("Elias", "墨讲师 Elias", "male", "多语种", description="沉稳博学的讲师", is_s2s=False),
+    QwenVoice("Arthur", "徐大爷 Arthur", "male", "多语种", description="慈祥健谈的老大爷", is_s2s=False),
+    QwenVoice("Nini", "邻家妹妹 Nini", "female", "多语种", description="亲切自然的邻家妹妹", is_s2s=False),
+    QwenVoice("Ebona", "诡婆婆 Ebona", "female", "多语种", description="神秘莫测的老婆婆", is_s2s=False),
+    QwenVoice("Seren", "小婉 Seren", "female", "多语种", description="温婉清秀", is_s2s=False),
+    QwenVoice("Pip", "顽皮小孩 Pip", "male", "多语种", description="活泼调皮的小男孩", is_s2s=False),
+    QwenVoice("Stella", "少女阿月 Stella", "female", "多语种", description="清新少女", is_s2s=False),
 ]
 
 QWEN_VOICE_BY_ID: dict[str, QwenVoice] = {v.voice_id: v for v in QWEN_VOICES}

@@ -109,7 +109,7 @@ def load_qwen_voices() -> list[Voice]:
             emoji="🎙️",
             trial_url="",
             languages=["zh-cn", "en"],
-            is_s2s=True,
+            is_s2s=v.is_s2s,
         ))
     return out
 

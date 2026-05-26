@@ -199,8 +199,8 @@ class TypedTranslatePanel(QFrame):
 
         self._src.currentIndexChanged.connect(lambda *_: self.sig_settings_changed.emit())
         self._tgt.currentIndexChanged.connect(lambda *_: self.sig_settings_changed.emit())
-        self._src.currentIndexChanged.connect(self._check_zh_to_zh)
-        self._tgt.currentIndexChanged.connect(self._check_zh_to_zh)
+        self._src.activated.connect(self._check_zh_to_zh)
+        self._tgt.activated.connect(self._check_zh_to_zh)
         self._auto_tts.toggled.connect(lambda *_: self.sig_settings_changed.emit())
 
     def _wrap_result(self, title: str, body: QLabel) -> QFrame:
