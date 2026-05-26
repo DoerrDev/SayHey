@@ -120,10 +120,11 @@ class QwenLiveTranslateEngine:
     mode='s2s' → 启用音频输出；mode='s2t' → 只输出文本（字幕）。
     """
 
-    def __init__(self, api_key: str, mode: str = "s2s", model: str = _QWEN_LT_MODEL) -> None:
+    def __init__(self, api_key: str, mode: str = "s2s", model: str = _QWEN_LT_MODEL, voice: str = "default") -> None:
         self.api_key = api_key
         self.mode = mode
         self.model = model
+        self.voice = voice or "default"
         self.config: Optional[TranslatorConfig] = None
         self.on_event: Optional[TranslatorEventCallback] = None
         self.ws = None
@@ -133,7 +134,21 @@ class QwenLiveTranslateEngine:
         self.audio_segment_id = 0
         self.dropped_audio_chunks = 0
         self._source_acc = ""
-        self._trans_acc = ""
+        # 译文累计采用 part-aware 双层结构：
+        #   _trans_done_parts —— 已被 response.content_part.done 收口的 content_part 文本，按到达顺序排列
+        #   _trans_active_part —— 当前正在通过 delta / 快照构建的 content_part
+        # 任何 emit 出去的译文都用 "".join(done) + active 计算，跨 part 边界不会再被
+        # 单个 part 的快照覆盖回退（这是火山引擎事件流不需要担心的细节，但 Qwen 会）。
+        self._trans_done_parts: list[str] = []
+        self._trans_active_part: str = ""
+
+    def _trans_text(self) -> str:
+        return "".join(self._trans_done_parts) + self._trans_active_part
+
+    def _commit_active_part(self) -> None:
+        if self._trans_active_part:
+            self._trans_done_parts.append(self._trans_active_part)
+        self._trans_active_part = ""
 
     async def start(self, config: TranslatorConfig, on_event: TranslatorEventCallback) -> None:
         self.config = config
@@ -200,15 +215,24 @@ class QwenLiveTranslateEngine:
         if self.config.hotwords:
             translation["corpus"] = {"phrases": dict(self.config.hotwords)}
         session: dict = {
-            "input_audio_format": "pcm16",
+            "sample_rate": self.config.sample_rate,
+            "input_audio_format": "pcm",
             "modalities": modalities,
             "translation": translation,
-            "input_audio_transcription": {"model": "default"},
+            "input_audio_transcription": {"model": "qwen3-asr-flash-realtime"},
         }
         if self.mode == "s2s":
-            session["output_audio_format"] = "pcm16"
-            session["voice"] = "default"
-            session["voice_cloning"] = {"frequency": "once"}
+            session["output_audio_format"] = "pcm"
+            if self.voice.startswith("qwen-translate-vc-"):
+                session["voice"] = self.voice
+                session["enable_voice_clone"] = True
+                session["voice_clone_options"] = {"frequency": "never"}
+            elif self.voice == "default":
+                session["voice"] = "default"
+                session["enable_voice_clone"] = True
+                session["voice_clone_options"] = {"frequency": "once"}
+            else:
+                session["voice"] = self.voice
         evt = {"event_id": f"evt_{uuid.uuid4().hex[:8]}", "type": "session.update", "session": session}
         await self.ws.send(json.dumps(evt, ensure_ascii=False))
 
@@ -259,13 +283,22 @@ class QwenLiveTranslateEngine:
         if et == "response.created":
             self.audio_segment_id += 1
             self._source_acc = ""
-            self._trans_acc = ""
+            self._trans_done_parts = []
+            self._trans_active_part = ""
             return
         if et == "conversation.item.input_audio_transcription.delta":
             d = msg.get("delta") or ""
             if d:
                 self._source_acc += d
                 self._emit("source_text", text=self._source_acc)
+            return
+        if et == "conversation.item.input_audio_transcription.text":
+            committed = msg.get("text") or ""
+            stash = msg.get("stash") or ""
+            full = committed + stash
+            if full:
+                self._source_acc = full
+                self._emit("source_text", text=full)
             return
         if et == "conversation.item.input_audio_transcription.completed":
             t = msg.get("transcript") or ""
@@ -276,13 +309,39 @@ class QwenLiveTranslateEngine:
         if et in ("response.audio_transcript.delta", "response.text.delta"):
             d = msg.get("delta") or ""
             if d:
-                self._trans_acc += d
-                self._emit("translated_text", text=self._trans_acc)
+                self._trans_active_part += d
+                self._emit("translated_text", text=self._trans_text())
+            return
+        if et == "response.text.text":
+            # 当前 content_part 的快照（committed 部分 + stash 未确认部分）。仅在它
+            # 不短于当前累计时采纳，避免下一个 part 的开头碎片把这个 part 已经累到的
+            # 译文截短。
+            committed = msg.get("text") or ""
+            stash = msg.get("stash") or ""
+            full = committed + stash
+            if full and len(full) >= len(self._trans_active_part):
+                self._trans_active_part = full
+                self._emit("translated_text", text=self._trans_text())
             return
         if et in ("response.audio_transcript.done", "response.text.done"):
-            t = msg.get("transcript") or msg.get("text") or self._trans_acc
-            if t:
-                self._emit("translated_text", text=t)
+            # 单个 content_part 的"音频转写"或"文本"轨道完结。把权威 transcript 吸收进
+            # 当前 active part，但不在这里收口——收口统一由 content_part.done 负责，
+            # 防止 .done 和 content_part.done 串行触达时双重 commit。
+            t = msg.get("transcript") or msg.get("text") or ""
+            if t and len(t) >= len(self._trans_active_part):
+                self._trans_active_part = t
+            self._emit("translated_text", text=self._trans_text())
+            return
+        if et == "response.content_part.done":
+            # content_part 真正收口：先吸收权威文本，再把 active part 推入 done_parts。
+            # 下一个 part 的 delta 会从空 active 重新累计，因此不会"接在上一个 part 后面"
+            # 也不会"把上一个 part 覆盖掉"。
+            part = msg.get("part") or {}
+            t = part.get("text") or ""
+            if t and len(t) >= len(self._trans_active_part):
+                self._trans_active_part = t
+            self._commit_active_part()
+            self._emit("translated_text", text=self._trans_text())
             return
         if et == "response.audio.delta":
             b64 = msg.get("delta") or ""
@@ -332,10 +391,11 @@ class QwenAsrTtsEngine:
         self.ws = await websockets.connect(url, **_connect_kwargs(self.api_key))
         tgt = (config.target_language or "zh").lower()
         session = {
-            "input_audio_format": "pcm16",
+            "sample_rate": config.sample_rate,
+            "input_audio_format": "pcm",
             "modalities": ["text"],
             "translation": {"language": tgt},
-            "input_audio_transcription": {"model": "default"},
+            "input_audio_transcription": {"model": "qwen3-asr-flash-realtime"},
         }
         await self.ws.send(json.dumps({
             "event_id": f"evt_{uuid.uuid4().hex[:8]}",
@@ -469,7 +529,7 @@ class QwenAsrTtsEngine:
 
 # ---------- qwen-tts-realtime (typed 翻译后 TTS) ----------
 
-_QWEN_TTS_MODEL = "qwen-tts-realtime"
+_QWEN_TTS_MODEL = "qwen3-tts-flash-realtime"
 
 PcmCallback = Callable[[bytes], None]
 StatusCallback = Callable[[str], None]
@@ -498,7 +558,7 @@ async def qwen_tts_stream(
     try:
         session = {
             "voice": cfg.voice or "Cherry",
-            "output_audio_format": "pcm16",
+            "output_audio_format": "pcm",
             "mode": "server_commit",
             "modalities": ["audio"],
         }

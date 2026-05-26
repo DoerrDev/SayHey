@@ -115,7 +115,7 @@ class HeaderBar(QWidget):
         self._advanced_btn.setCheckable(True)
         self._advanced_btn.setFixedWidth(80)
         self._advanced_btn.setToolTip("显示/隐藏高级音频设备选项")
-        self._advanced_btn.toggled.connect(self.sig_advanced_toggled.emit)
+        self._advanced_btn.toggled.connect(self._on_advanced_btn_toggled)
         layout.addWidget(self._advanced_btn)
 
         settings_btn = QToolButton()
@@ -173,6 +173,19 @@ class HeaderBar(QWidget):
         self._advanced_btn.blockSignals(True)
         self._advanced_btn.setChecked(show)
         self._advanced_btn.blockSignals(False)
+        self._update_advanced_btn_label(show)
+
+    def _update_advanced_btn_label(self, show: bool) -> None:
+        if show:
+            self._advanced_btn.setText("默认模式")
+            self._advanced_btn.setToolTip("点击恢复默认音频模式")
+        else:
+            self._advanced_btn.setText("高级音频")
+            self._advanced_btn.setToolTip("显示/隐藏高级音频设备选项")
+
+    def _on_advanced_btn_toggled(self, show: bool) -> None:
+        self._update_advanced_btn_label(show)
+        self.sig_advanced_toggled.emit(show)
 
     def set_usage_visible(self, visible: bool) -> None:
         self._usage_chip.setVisible(visible)

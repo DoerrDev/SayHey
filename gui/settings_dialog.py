@@ -710,7 +710,7 @@ class SettingsDialog(QDialog):
             hotkey_sim_checkbox=self._hk_sim_checkbox.combo(),
             hotkey_subtitle_drag_toggle=self._hk_subtitle_drag.combo(),
             hotkey_typed_tts_toggle=self._hk_typed_tts.combo(),
-            typed_hotkey=self._hk_typed_panel.combo() or s.typed_hotkey,
+            typed_hotkey=self._hk_typed_panel.combo(),
         )
 
     @Slot()

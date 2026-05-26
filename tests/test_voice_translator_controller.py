@@ -1,8 +1,13 @@
 import unittest
+import json
 from pathlib import Path
 
-from app_core.audio_io import AudioRouteConfig
+import numpy as np
+
+from app_core.audio_devices import AudioDevice
+from app_core.audio_io import AudioOutputSink, AudioRouteConfig
 from app_core.controller import AppConfig, VoiceTranslatorController
+from app_core.qwen_engine import QwenLiveTranslateEngine
 
 
 def _config(simultaneous_interpretation_enabled: bool) -> AppConfig:
@@ -34,6 +39,14 @@ class _Engine:
 
     async def send_audio(self, pcm_bytes: bytes) -> None:
         self.sent.append(pcm_bytes)
+
+
+class _Ws:
+    def __init__(self) -> None:
+        self.sent: list[str] = []
+
+    async def send(self, message: str) -> None:
+        self.sent.append(message)
 
 
 class VoiceTranslatorControllerTests(unittest.TestCase):
@@ -77,6 +90,112 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
 
         self.assertEqual(engine.sent, [b"mic-pcm"])
         self.assertEqual(len(futures), 1)
+
+    def test_qwen_s2s_engine_uses_selected_voice(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.engine_name = "qwen"
+        cfg.speaker_id = "Tina"
+        controller = VoiceTranslatorController(cfg)
+
+        engine = controller._build_engine()
+
+        self.assertIsInstance(engine, QwenLiveTranslateEngine)
+        self.assertEqual(engine.voice, "Tina")
+
+    def test_qwen_s2s_engine_uses_clone_when_voice_is_empty(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.engine_name = "qwen"
+        cfg.speaker_id = ""
+        controller = VoiceTranslatorController(cfg)
+
+        engine = controller._build_engine()
+
+        self.assertIsInstance(engine, QwenLiveTranslateEngine)
+        self.assertEqual(engine.voice, "default")
+
+    def test_qwen_s2s_session_update_clones_when_voice_is_default(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        ws = _Ws()
+        engine = QwenLiveTranslateEngine(api_key="key", mode="s2s")
+        engine.config = cfg
+        engine.ws = ws
+
+        import asyncio
+
+        asyncio.run(engine._send_session_update())
+
+        message = json.loads(ws.sent[0])
+        self.assertEqual(message["session"]["sample_rate"], 16000)
+        self.assertEqual(message["session"]["input_audio_format"], "pcm")
+        self.assertEqual(message["session"]["output_audio_format"], "pcm")
+        self.assertEqual(message["session"]["voice"], "default")
+        self.assertTrue(message["session"]["enable_voice_clone"])
+        self.assertEqual(message["session"]["voice_clone_options"], {"frequency": "once"})
+
+    def test_qwen_s2s_session_update_uses_selected_preset_voice_without_clone(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        ws = _Ws()
+        engine = QwenLiveTranslateEngine(api_key="key", mode="s2s", voice="Tina")
+        engine.config = cfg
+        engine.ws = ws
+
+        import asyncio
+
+        asyncio.run(engine._send_session_update())
+
+        message = json.loads(ws.sent[0])
+        self.assertEqual(message["session"]["voice"], "Tina")
+        self.assertNotIn("enable_voice_clone", message["session"])
+        self.assertNotIn("voice_clone_options", message["session"])
+
+    def test_qwen_s2s_session_update_uses_precloned_voice_without_new_clone(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        ws = _Ws()
+        engine = QwenLiveTranslateEngine(api_key="key", mode="s2s", voice="qwen-translate-vc-demo")
+        engine.config = cfg
+        engine.ws = ws
+
+        import asyncio
+
+        asyncio.run(engine._send_session_update())
+
+        message = json.loads(ws.sent[0])
+        self.assertEqual(message["session"]["voice"], "qwen-translate-vc-demo")
+        self.assertTrue(message["session"]["enable_voice_clone"])
+        self.assertEqual(message["session"]["voice_clone_options"], {"frequency": "never"})
+
+    def test_qwen_translated_audio_uses_24k_sample_rate(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.engine_name = "qwen"
+        cfg.sample_rate = 16000
+        controller = VoiceTranslatorController(cfg)
+
+        self.assertEqual(controller._translated_audio_sample_rate(), 24000)
+
+    def test_huoshan_translated_audio_uses_config_sample_rate(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.engine_name = "huoshan"
+        cfg.sample_rate = 16000
+        controller = VoiceTranslatorController(cfg)
+
+        self.assertEqual(controller._translated_audio_sample_rate(), 16000)
+
+    def test_audio_output_sink_applies_gain_with_clipping(self) -> None:
+        sink = AudioOutputSink(
+            device=AudioDevice(0, "out", "host", 0, 2, 48000),
+            source_sample_rate=48000,
+            output_sample_rate=48000,
+            source_channels=1,
+            output_channels=1,
+            record_dir=Path("."),
+            record_wav=False,
+            gain=2.0,
+        )
+        audio = np.array([[1000], [20000], [-20000]], dtype=np.int16)
+
+        amplified = sink._apply_gain(audio)
+
+        self.assertEqual(amplified.tolist(), [[2000], [32767], [-32768]])
 
 
 if __name__ == "__main__":

@@ -118,6 +118,7 @@ class AudioOutputSink:
         record_wav: bool,
         on_status: Optional[StatusCallback] = None,
         on_first_write: Optional[Callable[[float, int], None]] = None,
+        gain: float = 1.0,
     ) -> None:
         self.device = device
         self.source_sample_rate = source_sample_rate
@@ -128,6 +129,7 @@ class AudioOutputSink:
         self.record_wav = record_wav
         self.on_status = on_status
         self.on_first_write = on_first_write
+        self.gain = max(0.0, gain)
         self.stream: Optional[sd.OutputStream] = None
         self.wav_file: Optional[wave.Wave_write] = None
         self.output_path: Optional[Path] = None
@@ -223,6 +225,7 @@ class AudioOutputSink:
 
     def _fit_output_channels(self, pcm_bytes: bytes) -> np.ndarray:
         audio = np.frombuffer(pcm_bytes, dtype=np.int16).reshape(-1, self.source_channels)
+        audio = self._apply_gain(audio)
         audio = self._resample_if_needed(audio)
         if self.source_channels == self.output_channels:
             return audio
@@ -239,6 +242,12 @@ class AudioOutputSink:
         if audio.size == 0:
             return 0.0
         return float(np.sqrt(np.mean(np.square(audio.astype(np.float32)))) / np.iinfo(np.int16).max)
+
+    def _apply_gain(self, audio: np.ndarray) -> np.ndarray:
+        if self.gain == 1.0 or audio.size == 0:
+            return audio
+        amplified = audio.astype(np.float32) * self.gain
+        return np.clip(amplified, -32768, 32767).astype(np.int16)
 
     def _resample_if_needed(self, audio: np.ndarray) -> np.ndarray:
         if self.source_sample_rate == self.output_sample_rate or audio.size == 0:

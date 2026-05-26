@@ -8,6 +8,10 @@ class AdvancedPanelSettingTests(unittest.TestCase):
         s = AppSettings()
         self.assertFalse(s.show_advanced_panel)
 
+    def test_qwen_s2s_voice_defaults_to_clone(self):
+        s = AppSettings()
+        self.assertEqual(s.qwen_s2s_speaker_id, "")
+
     def test_round_trips_through_json(self):
         with tempfile.TemporaryDirectory() as d:
             path = pathlib.Path(d) / "settings.json"

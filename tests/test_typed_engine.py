@@ -4,6 +4,7 @@ from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError
 
+from app_core.qwen_engine import QwenTtsConfig
 from app_core.typed_engine import (
     DoubaoTranslateConfig,
     doubao_translate_text,
@@ -13,6 +14,8 @@ from app_core.typed_engine import (
 
 
 class _FakeResponse:
+    headers = {}
+
     def __enter__(self):
         return self
 
@@ -82,6 +85,11 @@ class TypedEngineTests(unittest.TestCase):
 
     def test_tts_session_finished_event_is_known(self) -> None:
         self.assertEqual(_EVENT_SESSION_FINISHED, 152)
+
+    def test_qwen_tts_defaults_to_qwen3_flash_model(self) -> None:
+        cfg = QwenTtsConfig(api_key="key", voice="Katerina")
+
+        self.assertEqual(cfg.model, "qwen3-tts-flash-realtime")
 
 
 if __name__ == "__main__":

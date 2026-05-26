@@ -35,6 +35,7 @@ class AppConfig:
     chunk_ms: int = 80
     sample_rate: int = 16000
     output_channels: int = 2
+    output_gain: float = 1.0
     engine_name: str = "huoshan"
     hotwords: dict = field(default_factory=dict)
 
@@ -145,30 +146,46 @@ class VoiceTranslatorController:
 
     def _start_output_with_fallback(self, devices: list[AudioDevice]) -> AudioOutputSink:
         last_error: Optional[Exception] = None
-        for device in devices:
-            sink = AudioOutputSink(
-                device=device,
-                source_sample_rate=self.config.sample_rate,
-                output_sample_rate=int(device.default_samplerate),
-                source_channels=1,
-                output_channels=min(max(1, self.config.output_channels), device.max_output_channels),
-                record_dir=self.config.translated_record_dir,
-                record_wav=self.config.audio_route.record_translated_wav,
-                on_status=self._emit_status,
-                on_first_write=self._handle_output_first_write,
-            )
-            try:
-                sink.start()
-                self._emit_status(
-                    f"Output active: #{device.index} {device.name} | {device.hostapi} "
-                    f"({int(device.default_samplerate)} Hz)"
+        source_sample_rate = self._translated_audio_sample_rate()
+        retry_delays = (0.0, 0.3, 0.6, 1.0)
+        for attempt, delay in enumerate(retry_delays):
+            if delay > 0:
+                self._emit_status(f"Output device busy, retry in {int(delay * 1000)}ms (#{attempt})")
+                time.sleep(delay)
+            attempt_error: Optional[Exception] = None
+            for device in devices:
+                sink = AudioOutputSink(
+                    device=device,
+                    source_sample_rate=source_sample_rate,
+                    output_sample_rate=int(device.default_samplerate),
+                    source_channels=1,
+                    output_channels=min(max(1, self.config.output_channels), device.max_output_channels),
+                    record_dir=self.config.translated_record_dir,
+                    record_wav=self.config.audio_route.record_translated_wav,
+                    on_status=self._emit_status,
+                    on_first_write=self._handle_output_first_write,
+                    gain=self.config.output_gain,
                 )
-                return sink
-            except Exception as exc:
-                last_error = exc
-                sink.stop()
-                self._emit_status(f"Output backend failed: #{device.index} {device.hostapi}: {exc}")
+                try:
+                    sink.start()
+                    self._emit_status(
+                        f"Output active: #{device.index} {device.name} | {device.hostapi} "
+                        f"({int(device.default_samplerate)} Hz)"
+                    )
+                    return sink
+                except Exception as exc:
+                    attempt_error = exc
+                    last_error = exc
+                    sink.stop()
+                    self._emit_status(f"Output backend failed: #{device.index} {device.hostapi}: {exc}")
+            if attempt_error is None:
+                break
         raise RuntimeError(f"Unable to start output stream. Last error: {last_error}")
+
+    def _translated_audio_sample_rate(self) -> int:
+        if self.config.engine_name == "qwen":
+            return 24000
+        return self.config.sample_rate
 
     def _start_input_with_fallback(self, devices: list[AudioDevice]) -> None:
         last_error: Optional[Exception] = None
@@ -204,12 +221,13 @@ class VoiceTranslatorController:
         if self.config.engine_name == "qwen":
             src = (self.config.source_language or "").lower()
             tgt = (self.config.target_language or "").lower()
+            voice = (self.config.speaker_id or "").strip()
             if src and src == tgt and src != "auto":
                 return QwenAsrTtsEngine(
                     api_key=self.config.api_key,
-                    voice=self.config.speaker_id or "Cherry",
+                    voice=voice or "Cherry",
                 )
-            return QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2s")
+            return QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2s", voice=voice or "default")
         return VolcAstS2SEngine(
             ws_url=self.config.ws_url,
             api_key=self.config.api_key,
@@ -349,7 +367,7 @@ def build_app_config(env_path: Path) -> AppConfig:
         ),
         translated_record_dir=current_dir / os.environ.get("S2S_RECORD_DIR", "recordings_s2s").strip(),
         speaker_id=(
-            os.environ.get("QWEN_S2S_SPEAKER_ID", "").strip() or "Cherry"
+            os.environ.get("QWEN_S2S_SPEAKER_ID", "").strip()
             if engine_name == "qwen"
             else (os.environ.get("S2S_SPEAKER_ID", "").strip() or None)
         ),
@@ -361,5 +379,6 @@ def build_app_config(env_path: Path) -> AppConfig:
         chunk_ms=int(os.environ.get("CHUNK_MS", "80").strip()),
         sample_rate=sample_rate,
         output_channels=int(os.environ.get("VB_CABLE_OUTPUT_CHANNELS", "2").strip()),
+        output_gain=float(os.environ.get("S2S_OUTPUT_GAIN", "1.8" if engine_name == "qwen" else "1.0").strip()),
         engine_name=engine_name,
     )

@@ -69,7 +69,7 @@ class MicTranslatePanel(QFrame):
         self._mic_devices: list[AudioDevice] = []
         self._speaker_id = "zh_female_xiaohe_jupiter_bigtts"
         self._source_buffer = SubtitleBuffer(self._set_source_text, max_lines=5)
-        self._translation_buffer = SubtitleBuffer(self._set_translation_text, max_lines=5)
+        self._translation_buffer = SubtitleBuffer(self._set_translation_text, max_lines=3)
         self._build_ui()
         self._populate_devices()
 

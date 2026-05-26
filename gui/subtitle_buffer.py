@@ -4,8 +4,10 @@ from typing import Callable
 
 from PySide6.QtCore import QTimer
 
-SENTENCE_ENDINGS = set("。！？!?!.．")
+SENTENCE_ENDINGS = set("。！？!?．.")
+COMMA_BREAKS = set("，、,;；:：")
 FLUSH_DELAY_MS = 700
+SOFT_WRAP_CHARS = 25  # 单段超过此长度时，按逗号兜底换行
 
 
 class SubtitleBuffer:
@@ -32,6 +34,12 @@ class SubtitleBuffer:
         if not token:
             return
         current = token
+        # 边界检测：若新快照不是旧 buffer 的前缀延伸，说明引擎刚刚重置了累计器
+        # （火山的 TTSSentenceStart、Qwen 的 response.created 都会触发这种情况），
+        # 此时必须先把旧 buffer flush 到 _lines，否则 700ms 自动 flush 还没来得及触发
+        # 就被覆盖，那一段译文就永远丢了。
+        if self._buffer and not current.startswith(self._buffer):
+            self._flush()
         self._buffer = current
         self._render(self._lines, current)
 
@@ -49,9 +57,11 @@ class SubtitleBuffer:
         self._flush_timer.stop()
         if not current:
             return
-        if not self._lines or self._lines[-1] != current:
-            self._lines.append(current)
-            del self._lines[:-self._max_lines]
+        parts = _split_for_display(current)
+        for part in parts:
+            if not self._lines or self._lines[-1] != part:
+                self._lines.append(part)
+        del self._lines[:-self._max_lines]
         self._buffer = ""
         self._render(self._lines, "")
 
@@ -67,8 +77,41 @@ class SubtitleBuffer:
     def _render(self, lines: list[str], current: str) -> None:
         committed = [line for line in lines if line]
         if current:
-            keep = max(0, self._max_lines - 1)
-            visible = committed[-keep:] + [current] if keep else [current]
+            cur_parts = _split_for_display(current)
+            keep = max(0, self._max_lines - len(cur_parts))
+            visible = committed[-keep:] + cur_parts if keep else cur_parts
         else:
             visible = committed[-self._max_lines:]
         self._on_display("\n".join(visible))
+
+
+def _split_for_display(text: str) -> list[str]:
+    """按句末标点拆行；单段过长时再按逗号兜底拆一次。"""
+    sentences: list[str] = []
+    cur = ""
+    for ch in text:
+        cur += ch
+        if ch in SENTENCE_ENDINGS:
+            stripped = cur.strip()
+            if stripped:
+                sentences.append(stripped)
+            cur = ""
+    tail = cur.strip()
+    if tail:
+        sentences.append(tail)
+
+    out: list[str] = []
+    for seg in sentences:
+        if len(seg) <= SOFT_WRAP_CHARS:
+            out.append(seg)
+            continue
+        buf = ""
+        for ch in seg:
+            buf += ch
+            if ch in COMMA_BREAKS and len(buf) >= SOFT_WRAP_CHARS:
+                out.append(buf.strip())
+                buf = ""
+        rest = buf.strip()
+        if rest:
+            out.append(rest)
+    return out

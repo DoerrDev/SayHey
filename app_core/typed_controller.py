@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -52,25 +53,35 @@ class TypedTranslateController:
         if self._sink is not None:
             return
         cable = self._resolver.resolve_cable_input(self.cfg.cable_input_name)
-        for dev in self._resolver.stable_output_candidates(cable):
-            sink = AudioOutputSink(
-                device=dev,
-                source_sample_rate=self.cfg.sample_rate,
-                output_sample_rate=int(dev.default_samplerate),
-                source_channels=1,
-                output_channels=min(2, dev.max_output_channels),
-                record_dir=Path("."),
-                record_wav=False,
-                on_status=self._emit,
-            )
-            try:
-                sink.start()
-                self._sink = sink
-                self._emit(f"[typed] CABLE 输出已就绪: #{dev.index} {dev.name}")
-                return
-            except Exception as exc:
-                sink.stop()
-                self._emit(f"[typed] CABLE 启动失败: {exc}")
+        candidates = self._resolver.stable_output_candidates(cable)
+        retry_delays = (0.0, 0.3, 0.6, 1.0)
+        for attempt, delay in enumerate(retry_delays):
+            if delay > 0:
+                self._emit(f"[typed] CABLE 设备繁忙，{int(delay * 1000)}ms 后重试 (#{attempt})")
+                time.sleep(delay)
+            last_exc: Optional[Exception] = None
+            for dev in candidates:
+                sink = AudioOutputSink(
+                    device=dev,
+                    source_sample_rate=self.cfg.sample_rate,
+                    output_sample_rate=int(dev.default_samplerate),
+                    source_channels=1,
+                    output_channels=min(2, dev.max_output_channels),
+                    record_dir=Path("."),
+                    record_wav=False,
+                    on_status=self._emit,
+                )
+                try:
+                    sink.start()
+                    self._sink = sink
+                    self._emit(f"[typed] CABLE 输出已就绪: #{dev.index} {dev.name}")
+                    return
+                except Exception as exc:
+                    last_exc = exc
+                    sink.stop()
+                    self._emit(f"[typed] CABLE 启动失败: {exc}")
+            if last_exc is None:
+                break
         raise RuntimeError("无法打开 CABLE Input 输出")
 
     def close(self) -> None:
