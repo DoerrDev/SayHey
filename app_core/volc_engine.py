@@ -217,6 +217,10 @@ class VolcAstS2SEngine:
         request.request.speech_rate = self.config.speech_rate
         if self.config.speaker_id:
             request.request.speaker_id = self.config.speaker_id
+        if self.config.hotwords:
+            for k, v in self.config.hotwords.items():
+                if k and v:
+                    request.request.corpus.glossary_list[k] = v
         return request
 
     def _build_audio_request(self, pcm_bytes: bytes) -> TranslateRequest:

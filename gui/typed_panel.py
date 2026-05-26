@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from gui.hotword_selector import HotwordSelector
 from gui.lang_picker import LangPicker
 
 TYPED_LANGUAGES = [
@@ -125,6 +126,7 @@ class TypedTranslatePanel(QFrame):
     sig_translate_requested = Signal(str)
     sig_settings_changed = Signal()
     sig_zh_to_zh_selected = Signal()
+    sig_hotword_changed = Signal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -162,6 +164,10 @@ class TypedTranslatePanel(QFrame):
         self._auto_tts = QCheckBox("自动合成语音并发送到虚拟声卡")
         self._auto_tts.setChecked(True)
         layout.addWidget(self._auto_tts)
+
+        self._hotword_selector = HotwordSelector()
+        self._hotword_selector.sig_changed.connect(self.sig_hotword_changed)
+        layout.addWidget(self._hotword_selector)
 
         self._input = _EnterTextEdit()
         self._input.setPlaceholderText("输入要发送给队友的句子。按 Enter 翻译，Shift + Enter 换行。")
@@ -247,6 +253,12 @@ class TypedTranslatePanel(QFrame):
 
     def set_auto_tts(self, on: bool) -> None:
         self._auto_tts.setChecked(on)
+
+    def selected_hotword_set(self) -> str:
+        return self._hotword_selector.current_title()
+
+    def set_hotword_set(self, title: str) -> None:
+        self._hotword_selector.set_current(title)
 
     def set_engine(self, engine: str) -> None:
         cur_src = self._src.currentData()

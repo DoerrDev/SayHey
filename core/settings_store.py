@@ -62,6 +62,9 @@ class AppSettings:
     qwen_api_key: str = ""
     qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
     qwen_s2s_speaker_id: str = "Cherry"
+    mic_hotword_set: str = ""
+    typed_hotword_set: str = ""
+    game_hotword_set: str = ""
 
 
 class SettingsStore:

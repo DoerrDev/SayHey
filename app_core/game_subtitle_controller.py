@@ -4,7 +4,7 @@ import asyncio
 import os
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -31,6 +31,7 @@ class GameSubtitleConfig:
     source_sample_rate: int = 48000
     chunk_ms: int = 80
     engine_name: str = "huoshan_s2t"
+    hotwords: dict = field(default_factory=dict)
 
 
 class GameSubtitleController:
@@ -70,6 +71,7 @@ class GameSubtitleController:
                     source_language=self.config.source_language,
                     target_language=self.config.target_language,
                     sample_rate=self.config.sample_rate,
+                    hotwords=dict(self.config.hotwords or {}),
                 ),
                 self._handle_engine_event,
             )

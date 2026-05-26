@@ -198,6 +198,10 @@ class HuoshanS2TSubtitleEngine:
         request.request.mode = "s2t"
         request.request.source_language = self.config.source_language
         request.request.target_language = self.config.target_language
+        if self.config.hotwords:
+            for k, v in self.config.hotwords.items():
+                if k and v:
+                    request.request.corpus.glossary_list[k] = v
         return request
 
     def _build_audio_request(self, pcm_bytes: bytes) -> TranslateRequest:

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_loopback_input
 from app_core.qwen_languages import QWEN_LIVE_ALL, QWEN_LIVE_SPEECH
+from gui.hotword_selector import HotwordSelector
 from gui.lang_picker import LangPicker
 from gui.subtitle_buffer import SubtitleBuffer
 from gui.icons import icon as _icon
@@ -58,6 +59,7 @@ class MicTranslatePanel(QFrame):
     sig_speech_rate_changed = Signal(int)
     sig_simultaneous_changed = Signal(bool)
     sig_zh_to_zh_selected = Signal()
+    sig_hotword_changed = Signal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -151,6 +153,9 @@ class MicTranslatePanel(QFrame):
         lang_row.addWidget(self._tgt_lang_combo, 1)
         layout.addLayout(lang_row)
         self._populate_language_combos("huoshan")
+        self._hotword_selector = HotwordSelector()
+        self._hotword_selector.sig_changed.connect(self.sig_hotword_changed)
+        layout.addWidget(self._hotword_selector)
         self._tgt_lang_combo.currentIndexChanged.connect(self._enforce_s2s_voice_constraint)
         self._src_lang_combo.activated.connect(self._check_zh_to_zh)
         self._tgt_lang_combo.activated.connect(self._check_zh_to_zh)
@@ -396,3 +401,9 @@ class MicTranslatePanel(QFrame):
 
     def set_route_text(self, text: str) -> None:
         self._route_label.setText(text)
+
+    def selected_hotword_set(self) -> str:
+        return self._hotword_selector.current_title()
+
+    def set_hotword_set(self, title: str) -> None:
+        self._hotword_selector.set_current(title)

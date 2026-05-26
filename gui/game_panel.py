@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from app_core.qwen_languages import QWEN_LIVE_ALL
+from gui.hotword_selector import HotwordSelector
 from gui.lang_picker import LangPicker
 from gui.subtitle_buffer import SubtitleBuffer
 
@@ -58,6 +59,7 @@ class GameSubtitlePanel(QFrame):
     sig_subtitle_flushed = Signal(str)  # buffered text ready for overlay
     sig_audio_device_changed = Signal(str)
     sig_zh_to_zh_selected = Signal()
+    sig_hotword_changed = Signal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -117,6 +119,10 @@ class GameSubtitlePanel(QFrame):
 
         lang_row.addStretch()
         layout.addLayout(lang_row)
+
+        self._hotword_selector = HotwordSelector()
+        self._hotword_selector.sig_changed.connect(self.sig_hotword_changed)
+        layout.addWidget(self._hotword_selector)
 
         # Audio source row (hidden in simplified mode)
         self._audio_row_widget = QWidget()
@@ -248,6 +254,12 @@ class GameSubtitlePanel(QFrame):
 
     def set_advanced(self, show: bool) -> None:
         self._audio_row_widget.setVisible(show)
+
+    def selected_hotword_set(self) -> str:
+        return self._hotword_selector.current_title()
+
+    def set_hotword_set(self, title: str) -> None:
+        self._hotword_selector.set_current(title)
 
     @Slot()
     def _on_toggle(self) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -32,6 +32,7 @@ class TypedConfig:
     engine_name: str = "huoshan"
     qwen_mt: Optional[QwenMtConfig] = None
     qwen_tts: Optional[QwenTtsConfig] = None
+    hotwords: dict = field(default_factory=dict)
 
 
 class TypedTranslateController:
@@ -94,7 +95,8 @@ class TypedTranslateController:
         elif self.cfg.engine_name == "qwen":
             mt = self.cfg.qwen_mt or QwenMtConfig(api_key="")
             translated = qwen_mt_translate(
-                mt, text, self.cfg.source_language, self.cfg.target_language, self._emit
+                mt, text, self.cfg.source_language, self.cfg.target_language, self._emit,
+                hotwords=dict(self.cfg.hotwords or {}),
             )
         else:
             translated = doubao_translate_text(

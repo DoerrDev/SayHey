@@ -12,6 +12,7 @@ class TranslatorConfig:
     speaker_id: Optional[str] = None
     speech_rate: int = 0
     provider_options: dict[str, str] = field(default_factory=dict)
+    hotwords: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

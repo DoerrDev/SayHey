@@ -4,7 +4,7 @@ import asyncio
 import os
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -36,6 +36,7 @@ class AppConfig:
     sample_rate: int = 16000
     output_channels: int = 2
     engine_name: str = "huoshan"
+    hotwords: dict = field(default_factory=dict)
 
 
 class VoiceTranslatorController:
@@ -101,6 +102,7 @@ class VoiceTranslatorController:
                         sample_rate=self.config.sample_rate,
                         speaker_id=self.config.speaker_id,
                         speech_rate=self.config.speech_rate,
+                        hotwords=dict(self.config.hotwords or {}),
                     ),
                     self._handle_engine_event,
                 )

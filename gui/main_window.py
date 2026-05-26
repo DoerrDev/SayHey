@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from app_core.audio_io import AudioRouteVerifier
 from app_core.controller import build_app_config
 from app_core.game_subtitle_controller import build_game_subtitle_config
+from core import hotword_store
 from core.bridge import ControllerThread, GameSubtitleThread
 from core.settings_store import AppSettings, SettingsStore
 from gui.device_checklist import DeviceChecklistPanel
@@ -228,6 +229,10 @@ class MainWindow(QMainWindow):
         self._game_panel.sig_zh_to_zh_selected.connect(self._on_zh_to_zh_selected)
         self._typed_panel.sig_zh_to_zh_selected.connect(self._on_zh_to_zh_selected)
 
+        self._mic_panel.sig_hotword_changed.connect(self._on_mic_hotword_changed)
+        self._typed_panel.sig_hotword_changed.connect(self._on_typed_hotword_changed)
+        self._game_panel.sig_hotword_changed.connect(self._on_game_hotword_changed)
+
         # Checklist
         self._checklist.sig_status.connect(self._on_status)
 
@@ -244,6 +249,26 @@ class MainWindow(QMainWindow):
 
     def _hotkey_display(self, raw: str) -> str:
         return format_hotkey(raw)
+
+    @Slot(str)
+    def _on_mic_hotword_changed(self, title: str) -> None:
+        self._store.save(replace(self._store.get(), mic_hotword_set=title))
+
+    @Slot(str)
+    def _on_typed_hotword_changed(self, title: str) -> None:
+        self._store.save(replace(self._store.get(), typed_hotword_set=title))
+
+    @Slot(str)
+    def _on_game_hotword_changed(self, title: str) -> None:
+        self._store.save(replace(self._store.get(), game_hotword_set=title))
+
+    def _load_hotwords(self, title: str) -> dict[str, str]:
+        if not title:
+            return {}
+        try:
+            return dict(hotword_store.load(title).entries)
+        except Exception:
+            return {}
 
     def _on_typed_settings_changed(self) -> None:
         s = self._store.get()
@@ -275,6 +300,7 @@ class MainWindow(QMainWindow):
             engine_name=s.translator_engine,
             qwen_mt=QwenMtConfig(api_key=s.qwen_api_key, base_url=s.qwen_base_url),
             qwen_tts=QwenTtsConfig(api_key=s.qwen_api_key, voice=s.qwen_s2s_speaker_id or "Cherry"),
+            hotwords=self._load_hotwords(self._typed_panel.selected_hotword_set()),
         )
         if self._typed_controller is None:
             self._typed_controller = TypedTranslateController(cfg)
@@ -428,6 +454,9 @@ class MainWindow(QMainWindow):
         self._typed_panel.set_source(s.typed_source_language)
         self._typed_panel.set_target(s.typed_target_language)
         self._typed_panel.set_auto_tts(s.typed_auto_tts)
+        self._mic_panel.set_hotword_set(s.mic_hotword_set)
+        self._typed_panel.set_hotword_set(s.typed_hotword_set)
+        self._game_panel.set_hotword_set(s.game_hotword_set)
         self._apply_hotkeys(s)
         self._header.set_advanced(s.show_advanced_panel)
         self._mic_panel.set_advanced(s.show_advanced_panel)
@@ -475,6 +504,7 @@ class MainWindow(QMainWindow):
             config.speaker_id = speaker_id
             config.simultaneous_interpretation_enabled = simultaneous_enabled
             config.speech_rate = speech_rate
+            config.hotwords = self._load_hotwords(self._mic_panel.selected_hotword_set())
             self._store.save(
                 replace(
                     self._store.get(),
@@ -586,6 +616,7 @@ class MainWindow(QMainWindow):
             config.source_language = src
             config.target_language = tgt
             config.audio_device_name = audio_device or None
+            config.hotwords = self._load_hotwords(self._game_panel.selected_hotword_set())
             self._store.save(replace(
                 self._store.get(),
                 game_subtitle_source_language=src,

@@ -40,19 +40,23 @@ def qwen_mt_translate(
     source_lang: str,
     target_lang: str,
     on_status: Optional[Callable[[str], None]] = None,
+    hotwords: Optional[dict[str, str]] = None,
 ) -> str:
     if not cfg.api_key:
         raise RuntimeError("未配置 Qwen API Key")
     url = cfg.base_url.rstrip("/") + "/services/aigc/text-generation/generation"
+    translation_options: dict = {
+        "source_lang": lang_name(source_lang),
+        "target_lang": lang_name(target_lang or "en"),
+    }
+    if hotwords:
+        translation_options["terms"] = [
+            {"source": k, "target": v} for k, v in hotwords.items() if k and v
+        ]
     body = {
         "model": cfg.model,
         "input": {"messages": [{"role": "user", "content": text}]},
-        "parameters": {
-            "translation_options": {
-                "source_lang": lang_name(source_lang),
-                "target_lang": lang_name(target_lang or "en"),
-            }
-        },
+        "parameters": {"translation_options": translation_options},
     }
     raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
     headers = {
@@ -192,10 +196,13 @@ class QwenLiveTranslateEngine:
         src = (self.config.source_language or "auto").lower()
         tgt = (self.config.target_language or "en").lower()
         modalities = ["text", "audio"] if self.mode == "s2s" else ["text"]
+        translation: dict = {"language": tgt}
+        if self.config.hotwords:
+            translation["corpus"] = {"phrases": dict(self.config.hotwords)}
         session: dict = {
             "input_audio_format": "pcm16",
             "modalities": modalities,
-            "translation": {"language": tgt},
+            "translation": translation,
             "input_audio_transcription": {"model": "default"},
         }
         if self.mode == "s2s":
