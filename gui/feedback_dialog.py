@@ -4,7 +4,7 @@ import json
 import urllib.request
 from dataclasses import replace
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -21,6 +21,34 @@ from PySide6.QtWidgets import (
 
 from core.machine_id import get_machine_id_hash
 from core.settings_store import SettingsStore
+
+
+_FEEDBACK_QSS = """
+QScrollArea#feedbackScrollArea, QWidget#feedbackChatContent {
+    background: transparent;
+}
+QFrame#feedbackBubble {
+    border-radius: 12px;
+    padding: 0px;
+    max-width: 460px;
+}
+QFrame#feedbackBubble[incoming="true"] {
+    background-color: rgba(163, 207, 255, 0.10);
+    border: 1px solid rgba(163, 207, 255, 0.18);
+}
+QFrame#feedbackBubble[incoming="false"] {
+    background-color: rgba(66, 221, 146, 0.18);
+    border: 1px solid rgba(66, 221, 146, 0.35);
+}
+QLabel#feedbackBubbleText {
+    background: transparent;
+    color: #eef7ff;
+}
+QLabel#feedbackBubbleMeta {
+    color: rgba(238, 247, 255, 0.55);
+    font-size: 12px;
+}
+"""
 
 
 class _NetThread(QThread):
@@ -101,9 +129,22 @@ class FeedbackDialog(QDialog):
         self.setWindowTitle("需求反馈")
         self.setMinimumSize(680, 700)
         self.resize(760, 760)
+        self._pending_scroll = False
+        self._last_count = -1
         self._build_ui()
+        self.setStyleSheet(_FEEDBACK_QSS)
         self._load_history()
         self._ack_unread_async()
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(8000)
+        self._poll_timer.timeout.connect(lambda: self._load_history(silent=True))
+        self._poll_timer.start()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._pending_scroll:
+            self._pending_scroll = False
+            QTimer.singleShot(0, self._scroll_to_bottom)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -243,6 +284,13 @@ class FeedbackDialog(QDialog):
             self._chat_column.insertWidget(insert_at, bubble)
             insert_at += 1
 
+        if self.isVisible():
+            QTimer.singleShot(0, self._scroll_to_bottom)
+        else:
+            self._pending_scroll = True
+
+    def _scroll_to_bottom(self) -> None:
+        self._chat_content.adjustSize()
         scroll_bar = self._chat_scroll.verticalScrollBar()
         scroll_bar.setValue(scroll_bar.maximum())
 
@@ -251,24 +299,38 @@ class FeedbackDialog(QDialog):
         self._send_btn.setEnabled(not busy)
         self._status_label.setText(status)
 
-    def _load_history(self) -> None:
-        self._set_busy(True, "同步中")
+    def _load_history(self, silent: bool = False) -> None:
+        if self._thread is not None and self._thread.isRunning():
+            return
+        if not silent:
+            self._set_busy(True, "同步中")
         base, mid = self._api_base, self._machine_id
+        self._silent_load = silent
         self._thread = _NetThread(lambda: _api_get(f"{base}/api/chat", mid), self)
         self._thread.sig_done.connect(self._on_history_loaded)
         self._thread.start()
 
     def _on_history_loaded(self, ok: bool, payload: object) -> None:
-        self._set_busy(False, "已同步")
+        silent = getattr(self, "_silent_load", False)
+        self._silent_load = False
         if not ok or not isinstance(payload, list):
+            if silent:
+                return
+            self._set_busy(False, "同步失败")
             self._clear_messages()
             error = QLabel(f"加载失败：{payload}")
             error.setObjectName("feedbackErrorState")
             error.setWordWrap(True)
             self._chat_column.insertWidget(0, error)
-            self._status_label.setText("同步失败")
             return
+        if silent and len(payload) == self._last_count:
+            self._set_busy(False, "已同步")
+            return
+        self._last_count = len(payload)
+        self._set_busy(False, "已同步")
         self._render(payload)
+        if silent:
+            self._ack_unread_async()
 
     def _ack_unread_async(self) -> None:
         base, mid = self._api_base, self._machine_id
