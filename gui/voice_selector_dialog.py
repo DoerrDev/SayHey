@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -237,7 +238,8 @@ class VoiceSelectorDialog(QDialog):
         self._search = QLineEdit()
         self._gender_chips: dict[str, _Chip] = {}
         self._lang_chips: dict[str, _Chip] = {}
-        self._s2s_only_chip: _Chip | None = None
+        self._mode_chips: dict[str, _Chip] = {}
+        self._mode_group: QButtonGroup | None = None
         self._selected_label = QLabel()
         self._list_layout = QVBoxLayout()
         self._player = QMediaPlayer(self)
@@ -264,7 +266,7 @@ class VoiceSelectorDialog(QDialog):
 
         # Subtitle hint (title now shown by native window title bar)
         sub_text = (
-            "Qwen 官方音色，全部可用于同声传译；支持中英为主，部分音色覆盖多语种。"
+            "Qwen 官方音色：标有「同传可用」的支持同声传译，其余为 TTS 专用（仅打字翻译）。可用上方筛选按钮切换。"
             if self._engine == "qwen"
             else "数据来源 seed-tts-2.0；标有「同传可用」的两个音色可用于同声传译，其余仅打字翻译。"
         )
@@ -282,9 +284,15 @@ class VoiceSelectorDialog(QDialog):
         self._search.setPlaceholderText("搜索名称 / voice_type / 描述")
         self._search.textChanged.connect(self._refresh_rows)
         search_row.addWidget(self._search, 1)
-        self._s2s_only_chip = _Chip("仅同传可用")
-        self._s2s_only_chip.toggled.connect(self._refresh_rows)
-        search_row.addWidget(self._s2s_only_chip)
+        self._mode_group = QButtonGroup(self)
+        self._mode_group.setExclusive(True)
+        for key, label in (("all", "全部"), ("s2s", "同传音色"), ("tts", "TTS 音色")):
+            chip = _Chip(label)
+            chip.setChecked(key == "all")
+            self._mode_chips[key] = chip
+            self._mode_group.addButton(chip)
+            chip.toggled.connect(self._refresh_rows)
+            search_row.addWidget(chip)
         clear_btn = QPushButton("清空筛选")
         clear_btn.setObjectName("voiceSecondaryButton")
         clear_btn.clicked.connect(self._clear_filters)
@@ -355,11 +363,21 @@ class VoiceSelectorDialog(QDialog):
         self._search.clear()
         for chip in list(self._gender_chips.values()) + list(self._lang_chips.values()):
             chip.setChecked(False)
-        if self._s2s_only_chip is not None:
-            self._s2s_only_chip.setChecked(False)
+        all_chip = self._mode_chips.get("all")
+        if all_chip is not None:
+            all_chip.setChecked(True)
+
+    def _current_mode(self) -> str:
+        for key, chip in self._mode_chips.items():
+            if chip.isChecked():
+                return key
+        return "all"
 
     def _matches(self, voice: Voice) -> bool:
-        if self._s2s_only_chip is not None and self._s2s_only_chip.isChecked() and not voice.is_s2s:
+        mode = self._current_mode()
+        if mode == "s2s" and not voice.is_s2s:
+            return False
+        if mode == "tts" and voice.is_s2s:
             return False
         active_genders = [g for g, c in self._gender_chips.items() if c.isChecked()]
         if active_genders and voice.gender not in active_genders:
