@@ -1,0 +1,328 @@
+# ARC Raiders 中→英 热词表
+# 格式：源词=目标译文
+# 大小写敏感，每行一对
+
+# === 游戏与阵营 ===
+ARC突袭者=ARC Raiders
+方舟突袭者=ARC Raiders
+奥术突袭者=ARC Raiders
+掠夺者=Raider
+突袭者=Raider
+地表=Topside
+地下城=Speranza
+斯佩兰扎=Speranza
+锈带=Rust Belt
+第一波=First Wave
+自动威胁=ARC
+机器人=ARC
+敌对玩家=Enemy Raider
+真人队=Raider squad
+三人队=Full squad
+独狼=Solo
+双排=Duo
+三排=Trio
+
+# === 地图 ===
+水坝战场=Dam Battlegrounds
+大坝战场=Dam Battlegrounds
+水坝=Dam Battlegrounds
+大坝=Dam Battlegrounds
+太空港=The Spaceport
+航天港=The Spaceport
+宇航港=The Spaceport
+埋葬之城=Buried City
+埋城=Buried City
+蓝门=The Blue Gate
+蓝色大门=The Blue Gate
+斯特拉蒙蒂斯=Stella Montis
+蒙蒂斯=Stella Montis
+裂潮=Riven Tides
+潮汐=Riven Tides
+
+# === 地图点位 ===
+控制塔=Control Tower
+研究行政楼=Research and Administration
+研究与行政=Research and Administration
+泵站=Pumping Station
+空间港=Spaceport
+发射塔=Launch Tower
+航站楼=Terminal
+地下掩体=Underground Bunker
+医院=Hospital
+市政厅=Town Hall
+居民区=Residential
+数据中心=Data Center
+收容实验室=Containment Labs
+通信塔=Communication Tower
+酒窖=Cellar
+没收室=Confiscation Room
+村庄=Village
+隐藏地堡=Hidden Bunker
+高价值区=High-tier loot zone
+热点=Hot zone
+撤离点=Extraction point
+电梯撤离=Extraction elevator
+地铁撤离=Metro extraction
+风井撤离=Air shaft extraction
+掠夺者舱口=Raider Hatch
+安全撤离=Safe extract
+
+# === 商人与NPC ===
+塞莱斯特=Celeste
+夏妮=Shani
+田文=Tian Wen
+阿波罗=Apollo
+兰斯=Lance
+武器商=Tian Wen
+爆破商=Apollo
+医疗商=Lance
+钥匙商=Shani
+材料商=Celeste
+游牧使者=Nomadic Envoy
+
+# === ARC敌人 ===
+堡垒=Bastion
+轰炸者=Bombardier
+火球=Fireball
+黄蜂=Hornet
+跃迁者=Leaper
+跳跃者=Leaper
+族母=Matriarch
+爆爆=Pop
+火箭兵=Rocketeer
+哨兵=Sentinel
+粉碎者=Shredder
+告密者=Snitch
+侦察者=Spotter
+勘测者=Surveyor
+女王=The Queen
+蜱虫=Tick
+炮塔=Turret
+胡蜂=Wasp
+无人机=Drone
+侦察无人机=Scout drone
+狙击炮塔=Sniper turret
+首领=Boss
+弱点=Weak point
+红点=Weak point
+
+# === 武器 ===
+铁砧=Anvil
+远日点=Aphelion
+琶音=Arpeggio
+贝蒂娜=Bettina
+山猫=Bobcat
+伯莱塔=Burletta
+均衡器=Equalizer
+费罗=Ferro
+发卡=Hairpin
+破壳者=Hullcracker
+公牛=Il Toro
+木星=Jupiter
+水壶=Kettle
+鱼鹰=Osprey
+响尾蛇=Rattler
+叛徒=Renegade
+缝合者=Stitcher
+暴风雨=Tempest
+洪流=Torrente
+猎人=Venator
+火山=Vulcano
+流氓=Rascal
+坎托=Canto
+多拉布拉=Dolabra
+
+# === 武器类型 ===
+手炮=Hand Cannon
+特殊武器=Special
+突击步枪=Assault Rifle
+冲锋枪=SMG
+手枪=Pistol
+轻机枪=LMG
+战斗步枪=Battle Rifle
+霰弹枪=Shotgun
+狙击步枪=Sniper Rifle
+近战武器=Melee Weapon
+发射器=Launcher
+全自动=Fully Automatic
+半自动=Semi-Automatic
+三连发=3-Round Burst
+栓动=Bolt-Action
+泵动=Pump-Action
+杠杆式=Lever-Action
+单动=Single-Action
+
+# === 弹药与配件 ===
+轻型弹药=Light Ammo
+中型弹药=Medium Ammo
+重型弹药=Heavy Ammo
+霰弹弹药=Shotgun Ammo
+发射器弹药=Launcher Ammo
+能量弹匣=Energy Clip
+弹匣=Magazine
+瞄准镜=Scope
+握把=Grip
+枪托=Stock
+消音器=Silencer
+斜角握把=Angled Grip
+水平握把=Horizontal Grip
+轻量枪托=Lightweight Stock
+枪械零件=Gun Parts
+复杂枪械零件=Complex Gun Parts
+蓝图=Blueprint
+
+# === 护甲与装备 ===
+护盾=Shield
+轻型护盾=Light Shield
+中型护盾=Medium Shield
+重型护盾=Heavy Shield
+护甲=Armor
+战斗护甲=Combat Armor
+背包=Backpack
+安全口袋=Safe Pocket
+生命值=Health
+血量=HP
+护盾碎了=Shield shattered
+修理工具=Repair Tool
+医疗包=Med-Kit
+急救包=Med-Kit
+兴奋剂=Stim
+绷带=Bandage
+肾上腺素针=Adrenaline Shot
+维塔喷雾=Vita Spray
+双筒望远镜=Binoculars
+路障套件=Barricade Kit
+蓝色荧光棒=Blue Light Stick
+
+# === 投掷物与陷阱 ===
+破片手雷=Frag Grenade
+手雷=Frag Grenade
+电磁脉冲手雷=EMP Grenade
+电磁手雷=EMP Grenade
+烟雾弹=Smoke Grenade
+燃烧手雷=Blaze Grenade
+燃烧陷阱=Blaze Grenade Trap
+陷阱=Trap
+爆炸物=Explosives
+投掷物=Throwables
+
+# === 增强与技能 ===
+增强=Augment
+战术增强=Tactical Augment
+被动增强=Passive Augment
+螳螂斗篷=Mantis Cloak
+动能屏障=Kinetic Barrier
+猎人本能=Hunter's Instinct
+技能树=Skill Tree
+远征点=Expedition Points
+机动=Mobility
+生存=Survival
+调理=Conditioning
+回合内制作=In-Round Crafting
+战或逃=Fight or Flight
+
+# === 任务与经济 ===
+任务=Quest
+商人任务=Trader Quest
+项目=Project
+远征=Expedition
+库存=Inventory
+仓库=Stash
+装配=Loadout
+装备配置=Loadout
+制作=Craft
+升级=Upgrade
+回收=Recycle
+出售=Sell
+购买=Buy
+交易=Trade
+硬币=Coins
+稀有度=Rarity
+普通=Common
+罕见=Uncommon
+稀有=Rare
+史诗=Epic
+传奇=Legendary
+
+# === 钥匙 ===
+掠夺者舱口钥匙=Raider Hatch Key
+蓝门酒窖钥匙=Blue Gate Cellar Key
+蓝门通信塔钥匙=Blue Gate Communication Tower Key
+蓝门没收室钥匙=Blue Gate Confiscation Room Key
+蓝门村庄钥匙=Blue Gate Village Key
+埋城医院钥匙=Buried City Hospital Key
+埋城员工卡=Buried City JKV Employee Access Card
+埋城住宅总钥匙=Buried City Residential Master Key
+埋城市政厅钥匙=Buried City Town Hall Key
+钥匙=Key
+门卡=Access Card
+
+# === 材料与战利品 ===
+高级ARC能量电池=Advanced ARC Powercell
+高级电气元件=Advanced Electrical Components
+高级机械元件=Advanced Mechanical Components
+龙舌兰=Agave
+龙舌兰汁=Agave Juice
+防腐剂=Antiseptic
+杏子=Apricot
+ARC合金=ARC Alloy
+ARC电路=ARC Circuitry
+ARC冷却液=ARC Coolant
+ARC柔性橡胶=ARC Flex Rubber
+ARC运动核心=ARC Motion Core
+ARC高性能钢=ARC Performance Steel
+ARC能量电池=ARC Powercell
+ARC合成树脂=ARC Synthetic Resin
+ARC隔热线=ARC Thermo Lining
+种子=Assorted Seeds
+电池=Battery
+堡垒核心=Bastion Cell
+轰炸者核心=Bombardier Cell
+烧毁的ARC电路=Burned ARC Circuitry
+镜头=Camera Lens
+烛莓=Candleberries
+罐子=Canister
+化学品=Chemicals
+材料=Materials
+精炼材料=Refined Material
+地表材料=Topside Material
+可回收物=Recyclable
+小饰品=Trinket
+
+# === 常用语音战术 ===
+撤离=Extract
+撤吧=Extract
+快撤=Extract now
+搜刮=Loot
+摸东西=Loot
+高价值战利品=High-value loot
+空投=Drop
+箱子=Crate
+搜箱=Loot crate
+打机器人=Fight ARC
+打女王=Fight the Queen
+打首领=Fight boss
+绕后=Flank
+架枪=Hold angle
+卡点=Hold position
+报点=Call out
+标记=Ping
+扫到人=Spotted players
+被标记=Marked
+被锁定=Locked on
+激光=Laser
+火箭=Rocket
+补枪=Finish
+救人=Revive
+倒了=Downed
+死了=Dead
+满编=Full squad
+残血=Low HP
+破盾=Shield broken
+换弹=Reloading
+没子弹=Out of ammo
+缺弹药=Need ammo
+缺药=Need meds
+满包=Full backpack
+回基地=Return to base
+别贪=Don't get greedy
