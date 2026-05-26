@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
+import sys
+
 STYLESHEET = """
 /* === Global === */
 QWidget {
     background-color: #0a1016;
     color: #eef7ff;
-    font-family: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    font-family: "MiSans", "Segoe UI Variable", "Segoe UI", "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     font-size: 13px;
 }
 QMainWindow {
@@ -211,7 +214,7 @@ QPlainTextEdit#log {
     color: #7a9db5;
     border: 1px solid rgba(163, 207, 255, 0.08);
     border-radius: 16px;
-    font-family: "Cascadia Code", "Consolas", monospace;
+    font-family: "JetBrains Mono", "Cascadia Mono", "Cascadia Code", "Consolas", "Microsoft YaHei UI", monospace;
     font-size: 11px;
     padding: 12px;
 }
@@ -494,10 +497,46 @@ QPushButton#floatSendBtn:hover {
 """
 
 
+def _font_dir() -> str:
+    base = getattr(sys, "_MEIPASS", None) or os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))
+    )
+    return os.path.join(base, "resource", "fonts")
+
+
+def _load_bundled_fonts() -> bool:
+    from PySide6.QtGui import QFontDatabase
+    fdir = _font_dir()
+    if not os.path.isdir(fdir):
+        return False
+    loaded = False
+    for name in ("MiSans-Regular.ttf", "MiSans-Bold.ttf"):
+        path = os.path.join(fdir, name)
+        if os.path.isfile(path) and QFontDatabase.addApplicationFont(path) != -1:
+            loaded = True
+    return loaded
+
+
 def apply_theme(app) -> None:
-    from PySide6.QtGui import QFont
+    from PySide6.QtGui import QFont, QFontDatabase
     app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
-    font = QFont("Segoe UI Variable", 10)
+
+    has_misans = _load_bundled_fonts()
+    families = set(QFontDatabase.families())
+    preferred = [
+        "MiSans" if has_misans else None,
+        "Segoe UI Variable",
+        "Segoe UI",
+        "HarmonyOS Sans SC",
+        "PingFang SC",
+        "Microsoft YaHei UI",
+        "Microsoft YaHei",
+        "Noto Sans CJK SC",
+    ]
+    chosen = next((f for f in preferred if f and f in families), "Segoe UI")
+    font = QFont(chosen, 10)
     font.setStyleHint(QFont.StyleHint.SansSerif)
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+    font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
     app.setFont(font)

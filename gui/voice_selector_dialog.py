@@ -105,7 +105,7 @@ def load_qwen_voices() -> list[Voice]:
             name=v.display_name,
             gender=gender,
             age="",
-            description=f"Qwen 官方音色 · 支持 {v.language}",
+            description=v.description or f"Qwen 官方音色 · 支持 {v.language}",
             emoji="🎙️",
             trial_url="",
             languages=["zh-cn", "en"],
