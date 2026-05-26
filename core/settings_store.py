@@ -56,6 +56,7 @@ class AppSettings:
     hotkey_sim_checkbox: str = ""
     hotkey_subtitle_drag_toggle: str = ""
     hotkey_typed_tts_toggle: str = ""
+    show_advanced_panel: bool = False
 
 
 class SettingsStore:
