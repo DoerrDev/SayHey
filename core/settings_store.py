@@ -57,6 +57,7 @@ class AppSettings:
     hotkey_subtitle_drag_toggle: str = ""
     hotkey_typed_tts_toggle: str = ""
     show_advanced_panel: bool = False
+    advanced_audio_warning_shown: bool = False
 
 
 class SettingsStore:

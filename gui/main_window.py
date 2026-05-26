@@ -100,6 +100,14 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def _on_advanced_toggled(self, show: bool) -> None:
+        if show and not self._store.get().advanced_audio_warning_shown:
+            from gui.advanced_audio_dialog import AdvancedAudioWarningDialog
+            dlg = AdvancedAudioWarningDialog(self)
+            if dlg.exec() != dlg.DialogCode.Accepted:
+                self._header.set_advanced(False)
+                return
+            if dlg.dont_show_again():
+                self._store.save(replace(self._store.get(), advanced_audio_warning_shown=True))
         self._mic_panel.set_advanced(show)
         self._game_panel.set_advanced(show)
         self._store.save(replace(self._store.get(), show_advanced_panel=show))

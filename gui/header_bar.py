@@ -110,10 +110,10 @@ class HeaderBar(QWidget):
         self._feedback_btn.clicked.connect(self.sig_open_feedback.emit)
         layout.addWidget(self._feedback_btn)
 
-        self._advanced_btn = QPushButton("高级")
+        self._advanced_btn = QPushButton("高级音频")
         self._advanced_btn.setObjectName("secondary")
         self._advanced_btn.setCheckable(True)
-        self._advanced_btn.setFixedWidth(60)
+        self._advanced_btn.setFixedWidth(80)
         self._advanced_btn.setToolTip("显示/隐藏高级音频设备选项")
         self._advanced_btn.toggled.connect(self.sig_advanced_toggled.emit)
         layout.addWidget(self._advanced_btn)
