@@ -65,8 +65,8 @@ class MicTranslatePanel(QFrame):
         self._resolver = DeviceResolver()
         self._mic_devices: list[AudioDevice] = []
         self._speaker_id = "zh_female_xiaohe_jupiter_bigtts"
-        self._source_buffer = SubtitleBuffer(self._set_source_text)
-        self._translation_buffer = SubtitleBuffer(self._set_translation_text)
+        self._source_buffer = SubtitleBuffer(self._set_source_text, max_lines=5)
+        self._translation_buffer = SubtitleBuffer(self._set_translation_text, max_lines=5)
         self._build_ui()
         self._populate_devices()
 
@@ -157,7 +157,8 @@ class MicTranslatePanel(QFrame):
         self._source_edit.setObjectName("routeLabel")
         self._source_edit.setText("")
         self._source_edit.setMinimumHeight(20)
-        self._source_edit.setWordWrap(False)
+        self._source_edit.setWordWrap(True)
+        self._source_edit.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._source_edit.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._source_edit)
 
@@ -368,10 +369,7 @@ class MicTranslatePanel(QFrame):
         self._translation_buffer.update(text)
 
     def _set_source_text(self, text: str) -> None:
-        last = text.strip().splitlines()[-1] if text.strip() else ""
-        if len(last) > 120:
-            last = "…" + last[-120:]
-        self._source_edit.setText(last)
+        self._source_edit.setText(text)
 
     def _set_translation_text(self, text: str) -> None:
         self._translation_edit.setPlainText(text)

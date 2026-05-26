@@ -15,7 +15,7 @@ class SubtitleBuffer:
     Must be created in the Qt main thread (QTimer lives there).
     """
 
-    def __init__(self, on_display: Callable[[str], None], max_lines: int = 2) -> None:
+    def __init__(self, on_display: Callable[[str], None], max_lines: int = 5) -> None:
         self._on_display = on_display
         self._max_lines = max_lines
         self._buffer: str = ""
