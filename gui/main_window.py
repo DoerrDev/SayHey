@@ -100,6 +100,16 @@ class MainWindow(QMainWindow):
         if info and info.has_update:
             self._header.set_update_available(info)
 
+    @Slot()
+    def _on_zh_to_zh_selected(self) -> None:
+        if self._store.get().zh_to_zh_info_shown:
+            return
+        from gui.zh_to_zh_info_dialog import ZhToZhInfoDialog
+        dlg = ZhToZhInfoDialog(self)
+        dlg.exec()
+        if dlg.dont_show_again():
+            self._store.save(replace(self._store.get(), zh_to_zh_info_shown=True))
+
     @Slot(bool)
     def _on_advanced_toggled(self, show: bool) -> None:
         if show and not self._store.get().advanced_audio_warning_shown:
@@ -213,6 +223,10 @@ class MainWindow(QMainWindow):
         # Typed panel
         self._typed_panel.sig_translate_requested.connect(self._on_typed_submit)
         self._typed_panel.sig_settings_changed.connect(self._on_typed_settings_changed)
+
+        self._mic_panel.sig_zh_to_zh_selected.connect(self._on_zh_to_zh_selected)
+        self._game_panel.sig_zh_to_zh_selected.connect(self._on_zh_to_zh_selected)
+        self._typed_panel.sig_zh_to_zh_selected.connect(self._on_zh_to_zh_selected)
 
         # Checklist
         self._checklist.sig_status.connect(self._on_status)
@@ -436,7 +450,7 @@ class MainWindow(QMainWindow):
         simultaneous_enabled = self._mic_panel.simultaneous_interpretation_enabled()
         speech_rate = self._mic_panel.selected_speech_rate()
 
-        if simultaneous_enabled and src_lang == tgt_lang and src_lang != "auto":
+        if simultaneous_enabled and src_lang == tgt_lang and src_lang != "auto" and src_lang != "zh":
             QMessageBox.warning(self, "语言设置", "源语言和目标语言不能相同")
             return
 

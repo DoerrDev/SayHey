@@ -57,6 +57,7 @@ class GameSubtitlePanel(QFrame):
     sig_overlay_toggle = Signal()
     sig_subtitle_flushed = Signal(str)  # buffered text ready for overlay
     sig_audio_device_changed = Signal(str)
+    sig_zh_to_zh_selected = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -177,6 +178,8 @@ class GameSubtitlePanel(QFrame):
         self._lang_hint.setVisible(not constraint_ok)
         if not self._is_running:
             self._toggle_btn.setEnabled(constraint_ok)
+        if src == "zh" and tgt == "zh":
+            self.sig_zh_to_zh_selected.emit()
 
     def selected_source_language(self) -> str:
         return self._src_combo.currentData() or "en"

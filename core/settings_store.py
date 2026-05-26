@@ -58,6 +58,7 @@ class AppSettings:
     hotkey_typed_tts_toggle: str = ""
     show_advanced_panel: bool = False
     advanced_audio_warning_shown: bool = False
+    zh_to_zh_info_shown: bool = False
     qwen_api_key: str = ""
     qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
     qwen_s2s_speaker_id: str = "Cherry"

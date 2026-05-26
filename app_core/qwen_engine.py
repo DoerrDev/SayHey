@@ -296,6 +296,170 @@ class QwenLiveTranslateEngine:
             self.on_event(TranslatorEvent(type=event_type, data=data, text=text, message=message, segment_id=segment_id))
 
 
+# ---------- src==tgt 旁路：ASR + TTS（不经翻译） ----------
+
+
+class QwenAsrTtsEngine:
+    """src==tgt 场景：使用 LiveTranslate 仅做 ASR，再把识别结果直接 TTS 出来。"""
+
+    def __init__(self, api_key: str, voice: str = "Cherry", model: str = _QWEN_LT_MODEL) -> None:
+        self.api_key = api_key
+        self.voice = voice or "Cherry"
+        self.model = model
+        self.config: Optional[TranslatorConfig] = None
+        self.on_event: Optional[TranslatorEventCallback] = None
+        self.ws = None
+        self.sender_task: Optional[asyncio.Task] = None
+        self.receiver_task: Optional[asyncio.Task] = None
+        self.audio_queue: Optional[asyncio.Queue[bytes | None]] = None
+        self.audio_segment_id = 0
+        self.dropped_audio_chunks = 0
+        self._source_acc = ""
+        self._tts_tasks: list[asyncio.Task] = []
+
+    async def start(self, config: TranslatorConfig, on_event: TranslatorEventCallback) -> None:
+        self.config = config
+        self.on_event = on_event
+        self.audio_queue = asyncio.Queue(maxsize=128)
+        url = f"{_QWEN_REALTIME_WS}?model={self.model}"
+        self.ws = await websockets.connect(url, **_connect_kwargs(self.api_key))
+        tgt = (config.target_language or "zh").lower()
+        session = {
+            "input_audio_format": "pcm16",
+            "modalities": ["text"],
+            "translation": {"language": tgt},
+            "input_audio_transcription": {"model": "default"},
+        }
+        await self.ws.send(json.dumps({
+            "event_id": f"evt_{uuid.uuid4().hex[:8]}",
+            "type": "session.update",
+            "session": session,
+        }, ensure_ascii=False))
+        self.sender_task = asyncio.create_task(self._send_loop())
+        self.receiver_task = asyncio.create_task(self._receive_loop())
+        self._emit("status", message="[qwen-asr+tts] session.update sent")
+
+    async def send_audio(self, pcm_bytes: bytes) -> None:
+        if self.audio_queue is None:
+            return
+        try:
+            self.audio_queue.put_nowait(pcm_bytes)
+        except asyncio.QueueFull:
+            self.dropped_audio_chunks += 1
+            try:
+                self.audio_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            try:
+                self.audio_queue.put_nowait(pcm_bytes)
+            except asyncio.QueueFull:
+                pass
+
+    async def stop(self) -> None:
+        if self.audio_queue is not None:
+            while not self.audio_queue.empty():
+                try:
+                    self.audio_queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+            try:
+                self.audio_queue.put_nowait(None)
+            except asyncio.QueueFull:
+                pass
+        if self.sender_task is not None:
+            try:
+                await asyncio.wait_for(self.sender_task, timeout=1.5)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                self.sender_task.cancel()
+            self.sender_task = None
+        if self.receiver_task is not None:
+            self.receiver_task.cancel()
+            try:
+                await self.receiver_task
+            except asyncio.CancelledError:
+                pass
+            self.receiver_task = None
+        for t in self._tts_tasks:
+            t.cancel()
+        self._tts_tasks.clear()
+        if self.ws is not None:
+            await self.ws.close()
+            self.ws = None
+        self.audio_queue = None
+
+    async def _send_loop(self) -> None:
+        assert self.ws is not None and self.audio_queue is not None
+        while True:
+            chunk = await self.audio_queue.get()
+            if chunk is None:
+                try:
+                    await self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                except Exception:
+                    pass
+                break
+            try:
+                b64 = base64.b64encode(chunk).decode("ascii")
+                await self.ws.send(json.dumps({"type": "input_audio_buffer.append", "audio": b64}))
+            except Exception as exc:
+                self._emit("error", message=f"qwen send failed: {exc}")
+                break
+
+    async def _receive_loop(self) -> None:
+        assert self.ws is not None
+        try:
+            while True:
+                raw = await self.ws.recv()
+                if isinstance(raw, (bytes, bytearray)):
+                    raw = raw.decode("utf-8", errors="ignore")
+                try:
+                    msg = json.loads(raw)
+                except Exception:
+                    continue
+                et = msg.get("type", "")
+                if et == "error":
+                    self._emit("error", message=f"qwen error: {msg.get('error', {})}")
+                    continue
+                if et == "conversation.item.input_audio_transcription.delta":
+                    d = msg.get("delta") or ""
+                    if d:
+                        self._source_acc += d
+                        self._emit("source_text", text=self._source_acc)
+                    continue
+                if et == "conversation.item.input_audio_transcription.completed":
+                    t = msg.get("transcript") or self._source_acc
+                    if t:
+                        self.audio_segment_id += 1
+                        seg = self.audio_segment_id
+                        self._emit("source_text", text=t)
+                        self._emit("translated_text", text=t)
+                        task = asyncio.create_task(self._run_tts(t, seg))
+                        self._tts_tasks.append(task)
+                    self._source_acc = ""
+                    continue
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._emit("error", message=f"qwen recv failed: {exc}")
+
+    async def _run_tts(self, text: str, segment_id: int) -> None:
+        cfg = QwenTtsConfig(api_key=self.api_key, voice=self.voice)
+
+        def on_pcm(data: bytes) -> None:
+            self._emit("translated_audio", data=data, segment_id=segment_id)
+
+        def on_status(msg: str) -> None:
+            self._emit("status", message=msg)
+
+        try:
+            await qwen_tts_stream(cfg, text, on_pcm, on_status)
+        except Exception as exc:
+            self._emit("error", message=f"qwen tts failed: {exc}")
+
+    def _emit(self, event_type: str, data: bytes = b"", text: str = "", message: str = "", segment_id: int = 0) -> None:
+        if self.on_event is not None:
+            self.on_event(TranslatorEvent(type=event_type, data=data, text=text, message=message, segment_id=segment_id))
+
+
 # ---------- qwen-tts-realtime (typed 翻译后 TTS) ----------
 
 _QWEN_TTS_MODEL = "qwen-tts-realtime"

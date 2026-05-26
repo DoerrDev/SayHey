@@ -85,7 +85,13 @@ class TypedTranslateController:
         if not text:
             return
         self._emit(f"[typed] 翻译开始：{text[:60]}")
-        if self.cfg.engine_name == "qwen":
+        if (
+            self.cfg.source_language == self.cfg.target_language
+            and self.cfg.source_language not in ("", "auto")
+        ):
+            translated = text
+            self._emit("[typed] 同语言：跳过翻译，直接 TTS")
+        elif self.cfg.engine_name == "qwen":
             mt = self.cfg.qwen_mt or QwenMtConfig(api_key="")
             translated = qwen_mt_translate(
                 mt, text, self.cfg.source_language, self.cfg.target_language, self._emit

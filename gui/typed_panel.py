@@ -124,6 +124,7 @@ class _EnterTextEdit(QPlainTextEdit):
 class TypedTranslatePanel(QFrame):
     sig_translate_requested = Signal(str)
     sig_settings_changed = Signal()
+    sig_zh_to_zh_selected = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -198,6 +199,8 @@ class TypedTranslatePanel(QFrame):
 
         self._src.currentIndexChanged.connect(lambda *_: self.sig_settings_changed.emit())
         self._tgt.currentIndexChanged.connect(lambda *_: self.sig_settings_changed.emit())
+        self._src.currentIndexChanged.connect(self._check_zh_to_zh)
+        self._tgt.currentIndexChanged.connect(self._check_zh_to_zh)
         self._auto_tts.toggled.connect(lambda *_: self.sig_settings_changed.emit())
 
     def _wrap_result(self, title: str, body: QLabel) -> QFrame:
@@ -219,6 +222,10 @@ class TypedTranslatePanel(QFrame):
         self.sig_translate_requested.emit(text)
 
     # ── public API ──
+    def _check_zh_to_zh(self) -> None:
+        if self.selected_source() == "zh" and self.selected_target() == "zh":
+            self.sig_zh_to_zh_selected.emit()
+
     def selected_source(self) -> str:
         return self._src.currentData() or "zh"
 

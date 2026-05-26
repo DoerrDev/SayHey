@@ -12,7 +12,7 @@ from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_audio
 from app_core.audio_io import AudioInputSource, AudioOutputSink, AudioRouteConfig
 from app_core.mock_engine import MockTranslatorEngine
 from app_core.translator import TranslatorConfig, TranslatorEvent
-from app_core.qwen_engine import QwenLiveTranslateEngine
+from app_core.qwen_engine import QwenAsrTtsEngine, QwenLiveTranslateEngine
 from app_core.volc_engine import VolcAstS2SEngine
 
 
@@ -200,6 +200,13 @@ class VoiceTranslatorController:
         if self.config.engine_name == "mock":
             return MockTranslatorEngine()
         if self.config.engine_name == "qwen":
+            src = (self.config.source_language or "").lower()
+            tgt = (self.config.target_language or "").lower()
+            if src and src == tgt and src != "auto":
+                return QwenAsrTtsEngine(
+                    api_key=self.config.api_key,
+                    voice=self.config.speaker_id or "Cherry",
+                )
             return QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2s")
         return VolcAstS2SEngine(
             ws_url=self.config.ws_url,

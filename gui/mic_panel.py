@@ -57,6 +57,7 @@ class MicTranslatePanel(QFrame):
     sig_output_device_changed = Signal()
     sig_speech_rate_changed = Signal(int)
     sig_simultaneous_changed = Signal(bool)
+    sig_zh_to_zh_selected = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -119,9 +120,9 @@ class MicTranslatePanel(QFrame):
         self._simultaneous_checkbox.setToolTip("选中：麦克风发送到服务商，转译音频输出到虚拟声卡；取消：麦克风直接输出到虚拟声卡。")
         self._simultaneous_checkbox.stateChanged.connect(self._on_simultaneous_changed)
         sim_row.addWidget(self._simultaneous_checkbox)
-        rate_label = QLabel("语速")
-        rate_label.setObjectName("routeLabel")
-        sim_row.addWidget(rate_label)
+        self._rate_label = QLabel("语速")
+        self._rate_label.setObjectName("routeLabel")
+        sim_row.addWidget(self._rate_label)
         self._speech_rate = QSlider(Qt.Orientation.Horizontal)
         self._speech_rate.setRange(-50, 100)
         self._speech_rate.setFixedWidth(140)
@@ -151,6 +152,8 @@ class MicTranslatePanel(QFrame):
         layout.addLayout(lang_row)
         self._populate_language_combos("huoshan")
         self._tgt_lang_combo.currentIndexChanged.connect(self._enforce_s2s_voice_constraint)
+        self._src_lang_combo.currentIndexChanged.connect(self._check_zh_to_zh)
+        self._tgt_lang_combo.currentIndexChanged.connect(self._check_zh_to_zh)
 
         # Source text (single-line compact)
         self._source_edit = QLabel("")
@@ -237,6 +240,13 @@ class MicTranslatePanel(QFrame):
 
     def _on_engine_changed(self, engine: str) -> None:
         self._populate_language_combos(engine)
+        self._update_speech_rate_visibility(engine)
+
+    def _update_speech_rate_visibility(self, engine: str) -> None:
+        supported = engine != "qwen"
+        self._rate_label.setVisible(supported)
+        self._speech_rate.setVisible(supported)
+        self._speech_rate_label.setVisible(supported)
 
     def selected_mic_device(self) -> AudioDevice | None:
         return self._mic_combo.currentData()
@@ -317,6 +327,10 @@ class MicTranslatePanel(QFrame):
         self._speaker_id = speaker_id.strip()
         self.sig_speaker_id_changed.emit(self._speaker_id)
         self._enforce_s2s_voice_constraint()
+
+    def _check_zh_to_zh(self) -> None:
+        if self.selected_source_language() == "zh" and self.selected_target_language() == "zh":
+            self.sig_zh_to_zh_selected.emit()
 
     def _enforce_s2s_voice_constraint(self) -> None:
         if self._engine_combo.currentText() == "qwen":
