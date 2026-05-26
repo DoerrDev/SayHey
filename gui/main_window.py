@@ -98,6 +98,12 @@ class MainWindow(QMainWindow):
         if info and info.has_update:
             self._header.set_update_available(info)
 
+    @Slot(bool)
+    def _on_advanced_toggled(self, show: bool) -> None:
+        self._mic_panel.set_advanced(show)
+        self._game_panel.set_advanced(show)
+        self._store.save(replace(self._store.get(), show_advanced_panel=show))
+
     def _build_layout(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
@@ -177,6 +183,7 @@ class MainWindow(QMainWindow):
         self._header.sig_open_settings.connect(self._open_settings)
         self._header.sig_open_usage.connect(self._open_usage)
         self._header.sig_open_feedback.connect(self._open_feedback)
+        self._header.sig_advanced_toggled.connect(self._on_advanced_toggled)
         self.sig_usage_updated.connect(self._on_usage_updated)
 
         # Game panel
@@ -392,6 +399,9 @@ class MainWindow(QMainWindow):
         self._typed_panel.set_target(s.typed_target_language)
         self._typed_panel.set_auto_tts(s.typed_auto_tts)
         self._apply_hotkeys(s)
+        self._header.set_advanced(s.show_advanced_panel)
+        self._mic_panel.set_advanced(s.show_advanced_panel)
+        self._game_panel.set_advanced(s.show_advanced_panel)
 
     @Slot()
     def _start_mic(self) -> None:
