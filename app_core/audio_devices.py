@@ -16,6 +16,34 @@ class AudioDevice:
     default_samplerate: float
 
 
+_VIRTUAL_LOOPBACK_INPUT_KEYWORDS = (
+    "cable output",
+    "voicemeeter output",
+    "voicemeeter aux output",
+    "voicemeeter vaio3 output",
+    "stereo mix",
+    "what u hear",
+    "wave out mix",
+)
+
+_VIRTUAL_OUTPUT_KEYWORDS = (
+    "cable input",
+    "voicemeeter input",
+    "voicemeeter aux input",
+    "voicemeeter vaio3 input",
+)
+
+
+def is_virtual_loopback_input(device: AudioDevice) -> bool:
+    name = device.name.lower()
+    return any(keyword in name for keyword in _VIRTUAL_LOOPBACK_INPUT_KEYWORDS)
+
+
+def is_virtual_audio_output(device: AudioDevice) -> bool:
+    name = device.name.lower()
+    return any(keyword in name for keyword in _VIRTUAL_OUTPUT_KEYWORDS)
+
+
 class DeviceResolver:
     def __init__(self) -> None:
         self._refresh()

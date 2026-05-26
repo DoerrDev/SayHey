@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from app_core.audio_devices import AudioDevice, DeviceResolver
+from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_audio_output, is_virtual_loopback_input
 from app_core.audio_io import AudioInputSource, AudioOutputSink, AudioRouteConfig
 from app_core.mock_engine import MockTranslatorEngine
 from app_core.translator import TranslatorConfig, TranslatorEvent
@@ -82,6 +82,7 @@ class VoiceTranslatorController:
                 cable_input = self.resolver.get(int(out_idx))
             else:
                 cable_input = self.resolver.resolve_cable_input(self.config.audio_route.output_device_name)
+            self._validate_audio_route(mic_device, cable_input)
             self._emit_status(
                 f"Input #{mic_device.index} {mic_device.name} ({int(mic_device.default_samplerate)} Hz) -> "
                 f"Output #{cable_input.index} {cable_input.name} ({int(cable_input.default_samplerate)} Hz)"
@@ -202,6 +203,16 @@ class VoiceTranslatorController:
             api_key=self.config.api_key,
             resource_id=self.config.resource_id,
         )
+
+    def _validate_audio_route(self, mic_device: AudioDevice, output_device: AudioDevice) -> None:
+        if not self.config.simultaneous_interpretation_enabled:
+            return
+        if is_virtual_loopback_input(mic_device) and is_virtual_audio_output(output_device):
+            raise RuntimeError(
+                "Audio feedback loop detected: the selected microphone is a virtual output/monitor endpoint "
+                f"({mic_device.name}) while translated audio is being sent to a virtual input ({output_device.name}). "
+                "Select a real physical microphone as the microphone input."
+            )
 
     def _send_audio_from_callback(self, pcm_bytes: bytes) -> None:
         if not self.config.simultaneous_interpretation_enabled:
