@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app_core.qwen_languages import QWEN_LIVE_ALL
+from gui.lang_picker import LangPicker
 from gui.subtitle_buffer import SubtitleBuffer
 
 # All S2T supported foreign languages (source OR target)
@@ -44,26 +46,7 @@ HUOSHAN_DIALECTS: list[tuple[str, str]] = [
     ("上海话 (Shanghai)", "sh-CN"),
 ]
 
-QWEN_LANGUAGES: list[tuple[str, str]] = [
-    ("中文 zh", "zh"),
-    ("英语 en", "en"),
-    ("日语 ja", "ja"),
-    ("韩语 ko", "ko"),
-    ("法语 fr", "fr"),
-    ("德语 de", "de"),
-    ("西班牙语 es", "es"),
-    ("葡萄牙语 pt", "pt"),
-    ("俄语 ru", "ru"),
-    ("意大利语 it", "it"),
-    ("印尼语 id", "id"),
-    ("越南语 vi", "vi"),
-    ("泰语 th", "th"),
-    ("阿拉伯语 ar", "ar"),
-    ("粵語 yue", "yue"),
-    ("印地语 hi", "hi"),
-    ("希腊语 el", "el"),
-    ("土耳其语 tr", "tr"),
-]
+QWEN_LANGUAGES: list[tuple[str, str]] = QWEN_LIVE_ALL
 
 _ZH_EN = {"zh", "en"}
 
@@ -103,11 +86,11 @@ class GameSubtitlePanel(QFrame):
         lang_row = QHBoxLayout()
         lang_row.setSpacing(12)
 
-        src_label = QLabel("游戏语言")
+        src_label = QLabel("目标语言")
         src_label.setObjectName("sectionTitle")
         lang_row.addWidget(src_label)
 
-        self._src_combo = QComboBox()
+        self._src_combo = LangPicker()
         for name, code in HUOSHAN_FOREIGN_LANGUAGES:
             self._src_combo.addItem(name, code)
         for name, code in HUOSHAN_DIALECTS:
@@ -124,7 +107,7 @@ class GameSubtitlePanel(QFrame):
         tgt_label.setObjectName("sectionTitle")
         lang_row.addWidget(tgt_label)
 
-        self._tgt_combo = QComboBox()
+        self._tgt_combo = LangPicker()
         for name, code in HUOSHAN_FOREIGN_LANGUAGES:
             self._tgt_combo.addItem(name, code)
         # Default: Chinese

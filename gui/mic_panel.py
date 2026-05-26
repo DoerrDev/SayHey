@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 )
 
 from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_loopback_input
+from app_core.qwen_languages import QWEN_LIVE_ALL, QWEN_LIVE_SPEECH
+from gui.lang_picker import LangPicker
 from gui.subtitle_buffer import SubtitleBuffer
 from gui.icons import icon as _icon
 from gui.voice_selector_dialog import S2S_VOICE_TYPES
@@ -32,39 +34,16 @@ HUOSHAN_LANGUAGES = [
     ("German", "de"),
     ("French", "fr"),
 ]
-QWEN_LANGUAGES = [
-    ("中文", "zh"),
-    ("英语 · English", "en"),
-    ("日语 · 日本語", "ja"),
-    ("韩语 · 한국어", "ko"),
-    ("法语 · Français", "fr"),
-    ("德语 · Deutsch", "de"),
-    ("西班牙语 · Español", "es"),
-    ("俄语 · Русский", "ru"),
-    ("意大利语 · Italiano", "it"),
-    ("葡萄牙语 · Português", "pt"),
-    ("阿拉伯语 · العربية", "ar"),
-    ("泰语 · ไทย", "th"),
-    ("越南语 · Tiếng Việt", "vi"),
-    ("印尼语 · Bahasa Indonesia", "id"),
-    ("粤语 · 粵語", "yue"),
-    ("印地语 · हिन्दी", "hi"),
-    ("希腊语 · Ελληνικά", "el"),
-    ("土耳其语 · Türkçe", "tr"),
-]
-LANGUAGES_BY_ENGINE: dict[str, list[tuple[str, str]]] = {
-    "huoshan": HUOSHAN_LANGUAGES,
-    "mock": HUOSHAN_LANGUAGES,
-    "qwen": QWEN_LANGUAGES,
-}
-
-
 def _source_langs(engine: str) -> list[tuple[str, str]]:
-    return LANGUAGES_BY_ENGINE.get(engine, HUOSHAN_LANGUAGES)
+    if engine == "qwen":
+        return QWEN_LIVE_ALL
+    return HUOSHAN_LANGUAGES
 
 
 def _target_langs(engine: str) -> list[tuple[str, str]]:
-    return LANGUAGES_BY_ENGINE.get(engine, HUOSHAN_LANGUAGES)
+    if engine == "qwen":
+        return QWEN_LIVE_SPEECH
+    return HUOSHAN_LANGUAGES
 
 
 class MicTranslatePanel(QFrame):
@@ -158,7 +137,7 @@ class MicTranslatePanel(QFrame):
         # Compact language row: [src] → [tgt]
         lang_row = QHBoxLayout()
         lang_row.setSpacing(8)
-        self._src_lang_combo = QComboBox()
+        self._src_lang_combo = LangPicker()
         self._src_lang_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         lang_row.addWidget(self._src_lang_combo, 1)
         arrow = QLabel("→")
@@ -166,7 +145,7 @@ class MicTranslatePanel(QFrame):
         arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         arrow.setFixedWidth(20)
         lang_row.addWidget(arrow)
-        self._tgt_lang_combo = QComboBox()
+        self._tgt_lang_combo = LangPicker()
         self._tgt_lang_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         lang_row.addWidget(self._tgt_lang_combo, 1)
         layout.addLayout(lang_row)

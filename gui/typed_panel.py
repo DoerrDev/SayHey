@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from gui.lang_picker import LangPicker
+
 TYPED_LANGUAGES = [
     ("中文", "zh"),
     ("English", "en"),
@@ -139,7 +141,7 @@ class TypedTranslatePanel(QFrame):
 
         lang_row = QHBoxLayout()
         lang_row.setSpacing(8)
-        self._src = QComboBox()
+        self._src = LangPicker()
         for name, code in TYPED_SOURCE_LANGUAGES:
             self._src.addItem(f"{name} ({code})", code)
         self._src.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -149,7 +151,7 @@ class TypedTranslatePanel(QFrame):
         arrow.setAlignment(Qt.AlignmentFlag.AlignCenter)
         arrow.setFixedWidth(20)
         lang_row.addWidget(arrow)
-        self._tgt = QComboBox()
+        self._tgt = LangPicker()
         for name, code in TYPED_LANGUAGES:
             self._tgt.addItem(f"{name} ({code})", code)
         self._tgt.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)

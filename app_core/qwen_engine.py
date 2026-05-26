@@ -11,30 +11,11 @@ from urllib import error, request
 
 import websockets
 
+from app_core.qwen_languages import QWEN_LANG_NAME_BY_CODE
 from app_core.translator import TranslatorConfig, TranslatorEvent, TranslatorEventCallback
 
 
-_LANG_NAME_BY_CODE: dict[str, str] = {
-    "auto": "auto",
-    "zh": "Chinese",
-    "en": "English",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "fr": "French",
-    "de": "German",
-    "es": "Spanish",
-    "ru": "Russian",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "ar": "Arabic",
-    "th": "Thai",
-    "vi": "Vietnamese",
-    "id": "Indonesian",
-    "yue": "Cantonese",
-    "hi": "Hindi",
-    "el": "Greek",
-    "tr": "Turkish",
-}
+_LANG_NAME_BY_CODE: dict[str, str] = {"auto": "auto", **QWEN_LANG_NAME_BY_CODE}
 
 
 def lang_name(code: str) -> str:
@@ -115,7 +96,7 @@ def qwen_mt_translate(
 # ---------- qwen3-livetranslate-flash-realtime WebSocket ----------
 
 _QWEN_REALTIME_WS = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
-_QWEN_LT_MODEL = "qwen3-livetranslate-flash-realtime"
+_QWEN_LT_MODEL = "qwen3.5-livetranslate-flash-realtime"
 
 
 def _connect_kwargs(api_key: str) -> dict:
