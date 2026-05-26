@@ -12,9 +12,10 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QSizePolicy,
+    QWidget,
 )
 
-from app_core.audio_devices import AudioDevice, DeviceResolver
+from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_loopback_input
 from gui.subtitle_buffer import SubtitleBuffer
 from gui.icons import icon as _icon
 from gui.voice_selector_dialog import S2S_VOICE_TYPES
@@ -90,8 +91,10 @@ class MicTranslatePanel(QFrame):
         mic_row.addWidget(refresh_btn)
         layout.addLayout(mic_row)
 
-        # Virtual mic output row
-        out_row = QHBoxLayout()
+        # Virtual mic output row (hidden in simplified mode)
+        self._out_row_widget = QWidget()
+        out_row = QHBoxLayout(self._out_row_widget)
+        out_row.setContentsMargins(0, 0, 0, 0)
         out_row.setSpacing(12)
         out_label = QLabel("虚拟麦克风")
         out_label.setObjectName("sectionTitle")
@@ -101,7 +104,7 @@ class MicTranslatePanel(QFrame):
         self._out_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._out_combo.currentIndexChanged.connect(self._on_output_changed)
         out_row.addWidget(self._out_combo, 1)
-        layout.addLayout(out_row)
+        layout.addWidget(self._out_row_widget)
 
         # Engine (hidden — kept for state; configure via settings dialog)
         self._engine_combo = QComboBox()
@@ -200,7 +203,7 @@ class MicTranslatePanel(QFrame):
     def _stable_logical_inputs(self) -> list[AudioDevice]:
         by_name: dict[str, list[AudioDevice]] = {}
         for device in self._resolver.input_devices():
-            if "cable output" in device.name.lower():
+            if is_virtual_loopback_input(device):
                 continue
             key = device.name.lower().strip()[:28]
             by_name.setdefault(key, []).append(device)
@@ -249,6 +252,9 @@ class MicTranslatePanel(QFrame):
 
     def selected_speech_rate(self) -> int:
         return self._speech_rate.value()
+
+    def set_advanced(self, show: bool) -> None:
+        self._out_row_widget.setVisible(show)
 
     def set_speech_rate(self, value: int) -> None:
         self._speech_rate.setValue(int(value))
