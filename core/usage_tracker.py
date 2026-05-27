@@ -22,7 +22,9 @@ PRICE_PER_MTOKEN = {
     "qwen_mt_output_tokens": 12.0,
 }
 
-_USAGE_RE = re.compile(r"\[(?:game-s2t-usage|usage|mt-usage|tts-usage|qwen-mt-usage)\]\s*(\{.*\})\s*$")
+_USAGE_RE = re.compile(
+    r"\[(?:game-s2t-usage|usage|mt-usage|tts-usage|qwen-mt-usage|qwen-realtime-usage|qwen-tts-usage)\]\s*(\{.*\})\s*$"
+)
 
 
 @dataclass
@@ -33,6 +35,7 @@ class UsageEvent:
     duration_ms: int
     tokens: dict[str, float]
     cost: float
+    provider: str = "huoshan"
 
 
 @dataclass
@@ -68,7 +71,11 @@ def parse_usage_line(line: str) -> Optional[tuple[str, dict]]:
             data = json.loads(payload)
         except Exception:
             return None
-    if "qwen-mt-usage" in line:
+    if "qwen-realtime-usage" in line:
+        source = "qwen-realtime"
+    elif "qwen-tts-usage" in line:
+        source = "qwen-tts"
+    elif "qwen-mt-usage" in line:
         source = "qwen-mt"
     elif "game-s2t-usage" in line:
         source = "game"
@@ -84,23 +91,48 @@ def parse_usage_line(line: str) -> Optional[tuple[str, dict]]:
 def extract_event(source: str, data: dict) -> Optional[UsageEvent]:
     tokens: dict[str, float] = {}
     duration = 0
-    if source == "qwen-mt":
-        in_tok = data.get("input_tokens") or data.get("prompt_tokens") or 0
-        out_tok = data.get("output_tokens") or data.get("completion_tokens") or 0
-        if in_tok:
-            tokens["qwen_mt_input_tokens"] = float(in_tok)
-        if out_tok:
-            tokens["qwen_mt_output_tokens"] = float(out_tok)
+    if source.startswith("qwen-"):
+        in_details = data.get("input_tokens_details") or {}
+        out_details = data.get("output_tokens_details") or {}
+        input_text = (
+            in_details.get("text_tokens")
+            or data.get("input_text_tokens")
+            or data.get("prompt_tokens")
+            or 0
+        )
+        input_audio = in_details.get("audio_tokens") or data.get("input_audio_tokens") or 0
+        output_text = (
+            out_details.get("text_tokens")
+            or data.get("output_text_tokens")
+            or data.get("completion_tokens")
+            or 0
+        )
+        output_audio = out_details.get("audio_tokens") or data.get("output_audio_tokens") or 0
+        if input_text:
+            tokens["input_text_tokens"] = float(input_text)
+        if input_audio:
+            tokens["input_audio_tokens"] = float(input_audio)
+        if output_text:
+            tokens["output_text_tokens"] = float(output_text)
+        if output_audio:
+            tokens["output_audio_tokens"] = float(output_audio)
+        if not tokens:
+            in_tok = data.get("input_tokens") or 0
+            out_tok = data.get("output_tokens") or 0
+            if in_tok:
+                tokens["input_text_tokens"] = float(in_tok)
+            if out_tok:
+                tokens["output_text_tokens"] = float(out_tok)
         if not tokens:
             return None
-        cost = calc_cost(tokens)
         return UsageEvent(
             ts=datetime.now().isoformat(timespec="seconds"),
             source=source,
             session_id="",
             duration_ms=0,
             tokens=tokens,
-            cost=cost,
+            cost=0.0,
+            provider="qwen",
         )
     meta = data.get("response_meta") or {}
     billing = meta.get("Billing") or {}
@@ -122,6 +154,7 @@ def extract_event(source: str, data: dict) -> Optional[UsageEvent]:
         duration_ms=duration,
         tokens=tokens,
         cost=cost,
+        provider="huoshan",
     )
 
 
@@ -199,6 +232,7 @@ class UsageTracker:
                     "duration_ms": e.duration_ms,
                     "tokens": e.tokens,
                     "cost": e.cost,
+                    "provider": e.provider,
                 }
                 for e in self.state.events
             ],
@@ -229,6 +263,7 @@ class UsageTracker:
                 duration_ms=int(e.get("duration_ms", 0)),
                 tokens=e.get("tokens", {}) or {},
                 cost=float(e.get("cost", 0.0)),
+                provider=e.get("provider", "qwen" if str(e.get("source", "")).startswith("qwen-") else "huoshan"),
             )
             for e in evs
         ]

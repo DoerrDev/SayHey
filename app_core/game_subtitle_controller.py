@@ -59,7 +59,11 @@ class GameSubtitleController:
         self.run_task = asyncio.current_task()
         try:
             if self.config.engine_name == "qwen":
-                self.engine = QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2t")
+                self.engine = QwenLiveTranslateEngine(
+                    api_key=self.config.api_key,
+                    mode="s2t",
+                    realtime_url=self.config.ws_url,
+                )
             else:
                 self.engine = HuoshanS2TSubtitleEngine(
                     ws_url=self.config.ws_url,
@@ -166,11 +170,13 @@ def build_game_subtitle_config(env_path: Path) -> GameSubtitleConfig:
     if engine_global == "qwen":
         api_key = os.environ.get("QWEN_API_KEY", "").strip()
         engine_name = "qwen"
+        ws_url = os.environ.get("QWEN_WS_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/realtime").strip()
     else:
         api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
         engine_name = os.environ.get("GAME_SUBTITLE_ENGINE", "huoshan_s2t").strip()
+        ws_url = os.environ.get("VOLC_WS_URL", "").strip() or _DEFAULT_VOLC_WS_URL
     return GameSubtitleConfig(
-        ws_url=os.environ.get("VOLC_WS_URL", "").strip() or _DEFAULT_VOLC_WS_URL,
+        ws_url=ws_url,
         api_key=api_key,
         resource_id=os.environ.get("VOLC_RESOURCE_ID", "volc.service_type.10053").strip(),
         source_language=os.environ.get("GAME_SUBTITLE_SOURCE_LANGUAGE", "en").strip(),

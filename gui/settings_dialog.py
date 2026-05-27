@@ -131,6 +131,16 @@ class _HotkeyCaptureEdit(QPushButton):
 VOLC_BILLING_DOC_URL = "https://www.volcengine.com/docs/6561/1359370?lang=zh"
 VOLC_BILLING_DOC_TITLE = "火山引擎豆包语音《计费说明》"
 VOLC_BILLING_DOC_UPDATED = "2026.05.19"
+QWEN_BILLING_DOC_URL = "https://help.aliyun.com/zh/model-studio/model-pricing"
+QWEN_LIVETRANSLATE_DOC_URL = "https://help.aliyun.com/zh/model-studio/qwen3-5-livetranslate-flash-realtime"
+QWEN_TTS_DOC_URL = "https://help.aliyun.com/zh/model-studio/tts-model"
+QWEN_BILLING_DOC_TITLE = "阿里云百炼《模型价格》"
+QWEN_BILLING_DOC_UPDATED = "2026.05.27"
+TRIAL_API_BASE_DEFAULT = "https://trial.sayhey.top"
+VOLC_TRIAL_WS_DEFAULT = "wss://trial.sayhey.top/api/v4/ast/v2/translate"
+QWEN_TRIAL_WS_DEFAULT = "wss://trial.sayhey.top/api/qwen/realtime"
+QWEN_TRIAL_BASE_DEFAULT = "https://trial.sayhey.top/api/qwen"
+LEGACY_TRIAL_HOST = "huoshanproxy.doerr.work"
 
 
 def _doubao_billing_html() -> str:
@@ -176,6 +186,56 @@ def _doubao_billing_html() -> str:
         <b style="color:#d8ecff;">引用：</b>
         {VOLC_BILLING_DOC_TITLE}，更新时间 {VOLC_BILLING_DOC_UPDATED}：
         <a style="color:#4f8cff;" href="{VOLC_BILLING_DOC_URL}">{VOLC_BILLING_DOC_URL}</a>
+      </p>
+    </div>
+    """
+
+
+def _qwen_billing_html() -> str:
+    return f"""
+    <div style="color:#9fb7ca; font-size:12px; line-height:1.45;">
+      <p style="margin:0 0 8px 0;">
+        当前应用用到 3 条 Qwen 链路：同传 / 字幕走 Qwen LiveTranslate Realtime，
+        打字翻译走 Qwen MT，打字后的语音发送走 Qwen3 TTS Realtime。所有价格均以阿里云百炼官方计费页为准。
+      </p>
+      <table cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%;">
+        <tr style="color:#d8ecff;">
+          <th align="left">功能</th>
+          <th align="left">模型与接口</th>
+          <th align="left">主要费率（中国内地）</th>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">同声传译（S2S）</b><br/>麦克风语音 → 翻译字幕 + 翻译语音</td>
+          <td>Qwen LiveTranslate Realtime<br/><code>qwen3.5-livetranslate-flash-realtime</code></td>
+          <td>输入音频 ¥40 / 百万 token<br/>输出文本 ¥100 / 百万 token<br/>输出音频 ¥160 / 百万 token</td>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">游戏字幕（S2T）</b><br/>电脑声音 → 翻译字幕</td>
+          <td>Qwen LiveTranslate Realtime<br/><code>qwen3.5-livetranslate-flash-realtime</code></td>
+          <td>输入音频 ¥40 / 百万 token<br/>输出文本 ¥100 / 百万 token<br/>不生成翻译语音时不产生输出音频项</td>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">打字翻译</b><br/>文本 → 译文</td>
+          <td>Qwen MT<br/><code>qwen-mt-turbo</code></td>
+          <td>输入 ¥0.7 / 百万 token<br/>输出 ¥1.95 / 百万 token</td>
+        </tr>
+        <tr>
+          <td><b style="color:#eef7ff;">打字语音输出</b><br/>译文 → 语音发送</td>
+          <td>Qwen3 TTS Flash Realtime<br/><code>qwen3-tts-flash-realtime</code></td>
+          <td>输入文本 ¥1 / 万字符<br/>输出不计费</td>
+        </tr>
+      </table>
+      <p style="margin:8px 0 0 0;">
+        <b style="color:#d8ecff;">计费口径：</b>
+        Qwen LiveTranslate 音频输入每秒约 7 token，音频输出每秒约 12.5 token；启用源语言转写时，源语言原文按输出文本 token 标准计费。
+        本应用的本地统计与试用代理扣减读取 DashScope 返回的 usage token，不折算人民币。
+      </p>
+      <p style="margin:8px 0 0 0;">
+        <b style="color:#d8ecff;">引用：</b>
+        {QWEN_BILLING_DOC_TITLE}，查询时间 {QWEN_BILLING_DOC_UPDATED}：
+        <a style="color:#4f8cff;" href="{QWEN_BILLING_DOC_URL}">{QWEN_BILLING_DOC_URL}</a><br/>
+        <a style="color:#4f8cff;" href="{QWEN_LIVETRANSLATE_DOC_URL}">{QWEN_LIVETRANSLATE_DOC_URL}</a><br/>
+        <a style="color:#4f8cff;" href="{QWEN_TTS_DOC_URL}">{QWEN_TTS_DOC_URL}</a>
       </p>
     </div>
     """
@@ -318,10 +378,14 @@ class SettingsDialog(QDialog):
         self._qwen_base_url.setPlaceholderText("https://dashscope.aliyuncs.com/api/v1")
         form.addRow("Base URL", self._qwen_base_url)
 
+        self._qwen_ws_url = QLineEdit()
+        self._qwen_ws_url.setPlaceholderText("wss://dashscope.aliyuncs.com/api-ws/v1/realtime")
+        form.addRow("WS URL", self._qwen_ws_url)
+
         note = QLabel(
             "启用 Qwen 后，三条管线（同传 / 字幕 / 打字翻译）将统一走 "
             "qwen3-livetranslate-flash-realtime + qwen-mt-turbo。\n"
-            "Qwen 模式下：试用代理不可用、网络代理不生效、计费 chip 隐藏。"
+            "Qwen 模式下：用量统计读取 DashScope 返回的 token usage，不折算人民币。"
         )
         note.setObjectName("routeLabel")
         note.setWordWrap(True)
@@ -332,17 +396,18 @@ class SettingsDialog(QDialog):
     def _set_engine(self, engine: str) -> None:
         self._engine_value = engine
         self._refresh_engine_buttons()
+        self._refresh_billing_content()
+        self._refresh_trial_content()
 
     def _refresh_engine_buttons(self) -> None:
         for btn, key in ((self._volc_enable_btn, "huoshan"), (self._qwen_enable_btn, "qwen")):
             on = self._engine_value == key
             btn.setChecked(on)
             btn.setText("✓ 已启用（当前引擎）" if on else "启用此引擎")
-        is_qwen = self._engine_value == "qwen"
         for tab in (self._billing_tab, self._trial_tab):
             idx = self._tabs.indexOf(tab)
             if idx >= 0:
-                self._tabs.setTabVisible(idx, not is_qwen)
+                self._tabs.setTabVisible(idx, True)
 
     def _test_qwen_key(self) -> None:
         from PySide6.QtWidgets import QMessageBox
@@ -374,35 +439,93 @@ class SettingsDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)
 
-        title = _section_title("AI 模型与费率说明")
-        layout.addWidget(title)
+        self._billing_title = _section_title("AI 模型与费率说明")
+        layout.addWidget(self._billing_title)
 
-        doubao_note = QLabel(_doubao_billing_html())
-        doubao_note.setObjectName("routeLabel")
-        doubao_note.setTextFormat(Qt.TextFormat.RichText)
-        doubao_note.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
-        doubao_note.setOpenExternalLinks(True)
-        doubao_note.setWordWrap(True)
-        layout.addWidget(doubao_note)
+        self._billing_note = QLabel()
+        self._billing_note.setObjectName("routeLabel")
+        self._billing_note.setTextFormat(Qt.TextFormat.RichText)
+        self._billing_note.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        self._billing_note.setOpenExternalLinks(True)
+        self._billing_note.setWordWrap(True)
+        layout.addWidget(self._billing_note)
 
         layout.addStretch(1)
         return w
 
+    def _refresh_billing_content(self) -> None:
+        if not hasattr(self, "_billing_note"):
+            return
+        if self._engine_value == "qwen":
+            self._billing_title.setText("AI 模型与费率说明 · Qwen")
+            self._billing_note.setText(_qwen_billing_html())
+        else:
+            self._billing_title.setText("AI 模型与费率说明 · 火山引擎")
+            self._billing_note.setText(_doubao_billing_html())
+
+    def _refresh_trial_content(self) -> None:
+        if not hasattr(self, "_trial_intro"):
+            return
+        self._normalize_trial_urls_for_engine()
+        idx = self._tabs.indexOf(self._trial_tab)
+        if self._engine_value == "qwen":
+            if idx >= 0:
+                self._tabs.setTabText(idx, " Qwen 试用")
+            self._trial_intro.setText(
+                "试用代理由作者自费提供，使用作者购买的 Qwen / DashScope API Key。\n"
+                "同一个试用 Token 可同时用于火山和 Qwen，但两边额度分开扣减。\n"
+                "如果体验良好，请前往「Qwen」Tab 填写自己的 API Key 以获得无限额度。"
+            )
+            self._volc_trial_enabled.setText("使用 Qwen 试用代理（覆盖 Qwen API Key、Base URL 与 WS URL）")
+            label = self._trial_form.labelForField(self._volc_trial_proxy_ws_url)
+            if label is not None:
+                label.setText("Qwen WS URL")
+        else:
+            if idx >= 0:
+                self._tabs.setTabText(idx, " 火山引擎试用")
+            self._trial_intro.setText(
+                "试用代理由作者自费提供，使用作者购买的火山引擎 App Key。\n"
+                "每个用户分配少量额度，超额自动断开。\n"
+                "如果体验良好，请前往「🌋 火山引擎」Tab 填写自己的 App Key 以获得无限额度。"
+            )
+            self._volc_trial_enabled.setText("使用试用代理（覆盖火山引擎 Key 与 WS URL）")
+            label = self._trial_form.labelForField(self._volc_trial_proxy_ws_url)
+            if label is not None:
+                label.setText("代理 WS URL")
+
+    def _normalize_trial_urls_for_engine(self) -> None:
+        api_base = self._volc_trial_api_base.text().strip()
+        if not api_base or LEGACY_TRIAL_HOST in api_base:
+            self._volc_trial_api_base.setText(TRIAL_API_BASE_DEFAULT)
+
+        ws_url = self._volc_trial_proxy_ws_url.text().strip()
+        if self._engine_value == "qwen":
+            if not ws_url or LEGACY_TRIAL_HOST in ws_url or "/api/v4/ast/" in ws_url:
+                self._volc_trial_proxy_ws_url.setText(QWEN_TRIAL_WS_DEFAULT)
+            if not self._qwen_base_url.text().strip() or LEGACY_TRIAL_HOST in self._qwen_base_url.text().strip():
+                self._qwen_base_url.setText(QWEN_TRIAL_BASE_DEFAULT)
+            if not self._qwen_ws_url.text().strip() or LEGACY_TRIAL_HOST in self._qwen_ws_url.text().strip():
+                self._qwen_ws_url.setText(QWEN_TRIAL_WS_DEFAULT)
+        else:
+            if not ws_url or LEGACY_TRIAL_HOST in ws_url or "/api/qwen/" in ws_url:
+                self._volc_trial_proxy_ws_url.setText(VOLC_TRIAL_WS_DEFAULT)
+
     def _build_volc_trial_tab(self) -> QWidget:
         w = self._tab_widget()
-        form = QFormLayout(w)
+        self._trial_form = QFormLayout(w)
+        form = self._trial_form
         form.setContentsMargins(20, 20, 20, 20)
         form.setSpacing(14)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        intro = QLabel(
+        self._trial_intro = QLabel(
             "试用代理由作者自费提供，使用作者购买的火山引擎 App Key。\n"
             "每个用户分配少量额度，超额自动断开。\n"
             "如果体验良好，请前往「🌋 火山引擎」Tab 填写自己的 App Key 以获得无限额度。"
         )
-        intro.setObjectName("routeLabel")
-        intro.setWordWrap(True)
-        form.addRow("", intro)
+        self._trial_intro.setObjectName("routeLabel")
+        self._trial_intro.setWordWrap(True)
+        form.addRow("", self._trial_intro)
 
         self._volc_trial_enabled = QCheckBox("使用试用代理（覆盖火山引擎 Key 与 WS URL）")
         form.addRow("", self._volc_trial_enabled)
@@ -566,9 +689,16 @@ class SettingsDialog(QDialog):
         reply = QMessageBox.question(
             self,
             "申请公益试用 Token",
-            "该 Token 是作者自费提供的公益额度，配额有限。\n"
-            "如果使用效果不错，强烈建议自己去火山引擎申请 App Key\n"
-            "（在「🌋 火山引擎」Tab 填写自己的 Key 即可获得无限额度）。\n\n"
+            (
+                "该 Token 是作者自费提供的 Qwen 公益额度，配额有限。\n"
+                "如果使用效果不错，强烈建议自己去 Qwen / DashScope 申请 API Key\n"
+                "（在「Qwen」Tab 填写自己的 Key 即可获得无限额度）。\n\n"
+                if self._engine_value == "qwen"
+                else
+                "该 Token 是作者自费提供的公益额度，配额有限。\n"
+                "如果使用效果不错，强烈建议自己去火山引擎申请 App Key\n"
+                "（在「🌋 火山引擎」Tab 填写自己的 Key 即可获得无限额度）。\n\n"
+            ) +
             "是否继续申请？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Yes,
@@ -594,13 +724,20 @@ class SettingsDialog(QDialog):
 
         token = data.get("token", "")
         proxy_url = data.get("proxy_ws_url", "") or self._volc_trial_proxy_ws_url.text().strip()
-        quota = float(data.get("quota_cny", 0))
-        used = float(data.get("used_cny", 0))
+        qwen_base_url = data.get("qwen_base_url", "")
+        qwen_ws_url = data.get("qwen_ws_url", "")
         self._volc_trial_token.setText(token)
-        if proxy_url:
+        if self._engine_value == "qwen":
+            if qwen_ws_url:
+                self._volc_trial_proxy_ws_url.setText(qwen_ws_url)
+        elif proxy_url:
             self._volc_trial_proxy_ws_url.setText(proxy_url)
+        if token and qwen_base_url and qwen_ws_url:
+            self._qwen_api_key.setText(token)
+            self._qwen_base_url.setText(qwen_base_url)
+            self._qwen_ws_url.setText(qwen_ws_url)
         self._volc_trial_enabled.setChecked(True)
-        self._volc_trial_balance.setText(f"剩余 ¥{max(quota-used,0):.4f} / 共 ¥{quota:.2f}")
+        self._set_trial_balance_text(data)
         QMessageBox.information(self, "申请成功", "Token 已写入，请记得点击「保存」生效。")
 
     def _refresh_trial_balance(self) -> None:
@@ -620,12 +757,20 @@ class SettingsDialog(QDialog):
         except Exception as exc:
             self._volc_trial_balance.setText(f"查询失败：{exc}")
             return
-        quota = float(data.get("quota_cny", 0))
-        used = float(data.get("used_cny", 0))
         disabled = bool(data.get("is_disabled", False))
         if disabled:
             self._volc_trial_balance.setText("Token 已被禁用")
         else:
+            self._set_trial_balance_text(data)
+
+    def _set_trial_balance_text(self, data: dict) -> None:
+        if self._engine_value == "qwen":
+            quota = int(data.get("qwen_quota_tokens") or 0)
+            used = int(data.get("qwen_used_tokens") or 0)
+            self._volc_trial_balance.setText(f"剩余 {max(quota - used, 0):,} / 共 {quota:,} tokens")
+        else:
+            quota = float(data.get("quota_cny", 0))
+            used = float(data.get("used_cny", 0))
             self._volc_trial_balance.setText(f"剩余 ¥{max(quota-used,0):.4f} / 共 ¥{quota:.2f}")
 
     def _open_volc_key_page(self) -> None:
@@ -650,8 +795,11 @@ class SettingsDialog(QDialog):
         self._volc_ws_url.setText(s.volc_ws_url)
         self._qwen_api_key.setText(s.qwen_api_key)
         self._qwen_base_url.setText(s.qwen_base_url)
+        self._qwen_ws_url.setText(s.qwen_ws_url)
         self._engine_value = "qwen" if s.translator_engine == "qwen" else "huoshan"
         self._refresh_engine_buttons()
+        self._refresh_billing_content()
+        self._refresh_trial_content()
 
         self._overlay_max_lines.setValue(s.overlay_max_lines)
         self._overlay_font_size.setValue(s.overlay_font_size)
@@ -668,6 +816,7 @@ class SettingsDialog(QDialog):
         self._volc_trial_token.setText(s.volc_trial_token)
         self._volc_trial_proxy_ws_url.setText(s.volc_trial_proxy_ws_url)
         self._volc_trial_api_base.setText(s.volc_trial_api_base)
+        self._refresh_trial_content()
 
         if s.volc_trial_token:
             self._refresh_trial_balance()
@@ -684,6 +833,17 @@ class SettingsDialog(QDialog):
     def _collect(self) -> AppSettings:
         s = self._store.get()
         from dataclasses import replace
+        trial_ws = self._volc_trial_proxy_ws_url.text().strip()
+        if self._engine_value == "qwen":
+            qwen_ws_url = trial_ws or self._qwen_ws_url.text().strip() or s.qwen_ws_url
+            volc_trial_proxy_ws_url = (
+                s.volc_trial_proxy_ws_url
+                if "/api/v4/ast/" in (s.volc_trial_proxy_ws_url or "")
+                else VOLC_TRIAL_WS_DEFAULT
+            )
+        else:
+            qwen_ws_url = self._qwen_ws_url.text().strip() or s.qwen_ws_url
+            volc_trial_proxy_ws_url = trial_ws or s.volc_trial_proxy_ws_url
         return replace(
             s,
             volc_api_key=self._volc_api_key.text().strip(),
@@ -692,6 +852,7 @@ class SettingsDialog(QDialog):
             translator_engine=self._engine_value,
             qwen_api_key=self._qwen_api_key.text().strip(),
             qwen_base_url=self._qwen_base_url.text().strip() or s.qwen_base_url,
+            qwen_ws_url=qwen_ws_url,
             overlay_max_lines=self._overlay_max_lines.value(),
             overlay_font_size=self._overlay_font_size.value(),
             overlay_opacity=self._overlay_opacity.value() / 100.0,
@@ -703,7 +864,7 @@ class SettingsDialog(QDialog):
             usage_chip_show_token=self._usage_chip_show_token.isChecked(),
             volc_trial_enabled=self._volc_trial_enabled.isChecked(),
             volc_trial_token=self._volc_trial_token.text().strip(),
-            volc_trial_proxy_ws_url=self._volc_trial_proxy_ws_url.text().strip() or s.volc_trial_proxy_ws_url,
+            volc_trial_proxy_ws_url=volc_trial_proxy_ws_url,
             volc_trial_api_base=self._volc_trial_api_base.text().strip() or s.volc_trial_api_base,
             hotkey_subtitle_toggle=self._hk_subtitle.combo(),
             hotkey_si_toggle=self._hk_si.combo(),

@@ -26,12 +26,32 @@ def lang_name(code: str) -> str:
 
 # ---------- qwen-mt-turbo REST ----------
 
+_QWEN_MT_MAX_TERMS = 20
+
 @dataclass
 class QwenMtConfig:
     api_key: str
     base_url: str = "https://dashscope.aliyuncs.com/api/v1"
     model: str = "qwen-mt-turbo"
     timeout: float = 10.0
+
+
+def _filter_qwen_mt_terms(text: str, hotwords: Optional[dict[str, str]]) -> list[dict[str, str]]:
+    if not hotwords:
+        return []
+    text_raw = text or ""
+    text_lower = text_raw.lower()
+    terms: list[dict[str, str]] = []
+    for source, target in hotwords.items():
+        source = (source or "").strip()
+        target = (target or "").strip()
+        if not source or not target:
+            continue
+        if source in text_raw or source.lower() in text_lower:
+            terms.append({"source": source, "target": target})
+            if len(terms) >= _QWEN_MT_MAX_TERMS:
+                break
+    return terms
 
 
 def qwen_mt_translate(
@@ -49,10 +69,14 @@ def qwen_mt_translate(
         "source_lang": lang_name(source_lang),
         "target_lang": lang_name(target_lang or "en"),
     }
-    if hotwords:
-        translation_options["terms"] = [
-            {"source": k, "target": v} for k, v in hotwords.items() if k and v
-        ]
+    terms = _filter_qwen_mt_terms(text, hotwords)
+    if terms:
+        translation_options["terms"] = terms
+    if on_status and hotwords:
+        try:
+            on_status(f"[qwen-mt-hotwords] matched {len(terms)}/{len(hotwords)}")
+        except Exception:
+            pass
     body = {
         "model": cfg.model,
         "input": {"messages": [{"role": "user", "content": text}]},
@@ -103,6 +127,17 @@ _QWEN_REALTIME_WS = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
 _QWEN_LT_MODEL = "qwen3.5-livetranslate-flash-realtime"
 
 
+def _qwen_usage_from_message(msg: dict) -> dict:
+    response = msg.get("response") or {}
+    usage = response.get("usage") or msg.get("usage") or {}
+    return usage if isinstance(usage, dict) else {}
+
+
+def _emit_qwen_usage(on_status: Optional[Callable[[str], None]], tag: str, usage: dict) -> None:
+    if on_status and usage:
+        on_status(f"[{tag}] {usage}")
+
+
 def _connect_kwargs(api_key: str) -> dict:
     headers = {"Authorization": f"Bearer {api_key}"}
     kwargs = {"max_size": 16 * 1024 * 1024, "ping_interval": None}
@@ -120,11 +155,19 @@ class QwenLiveTranslateEngine:
     mode='s2s' → 启用音频输出；mode='s2t' → 只输出文本（字幕）。
     """
 
-    def __init__(self, api_key: str, mode: str = "s2s", model: str = _QWEN_LT_MODEL, voice: str = "default") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        mode: str = "s2s",
+        model: str = _QWEN_LT_MODEL,
+        voice: str = "default",
+        realtime_url: str = _QWEN_REALTIME_WS,
+    ) -> None:
         self.api_key = api_key
         self.mode = mode
         self.model = model
         self.voice = voice or "default"
+        self.realtime_url = realtime_url or _QWEN_REALTIME_WS
         self.config: Optional[TranslatorConfig] = None
         self.on_event: Optional[TranslatorEventCallback] = None
         self.ws = None
@@ -154,7 +197,7 @@ class QwenLiveTranslateEngine:
         self.config = config
         self.on_event = on_event
         self.audio_queue = asyncio.Queue(maxsize=128)
-        url = f"{_QWEN_REALTIME_WS}?model={self.model}"
+        url = f"{self.realtime_url}?model={self.model}"
         self.ws = await websockets.connect(url, **_connect_kwargs(self.api_key))
         await self._send_session_update()
         self.sender_task = asyncio.create_task(self._send_loop())
@@ -353,6 +396,9 @@ class QwenLiveTranslateEngine:
                 self._emit("translated_audio", data=data, segment_id=self.audio_segment_id)
             return
         if et == "response.done":
+            usage = _qwen_usage_from_message(msg)
+            if usage:
+                self._emit("status", message=f"[qwen-realtime-usage] {usage}")
             self._emit("status", message="[qwen] response.done")
             return
         self._emit("status", message=f"[qwen-evt] {et}")
@@ -368,10 +414,17 @@ class QwenLiveTranslateEngine:
 class QwenAsrTtsEngine:
     """src==tgt 场景：使用 LiveTranslate 仅做 ASR，再把识别结果直接 TTS 出来。"""
 
-    def __init__(self, api_key: str, voice: str = "Cherry", model: str = _QWEN_LT_MODEL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        voice: str = "Cherry",
+        model: str = _QWEN_LT_MODEL,
+        realtime_url: str = _QWEN_REALTIME_WS,
+    ) -> None:
         self.api_key = api_key
         self.voice = voice or "Cherry"
         self.model = model
+        self.realtime_url = realtime_url or _QWEN_REALTIME_WS
         self.config: Optional[TranslatorConfig] = None
         self.on_event: Optional[TranslatorEventCallback] = None
         self.ws = None
@@ -387,7 +440,7 @@ class QwenAsrTtsEngine:
         self.config = config
         self.on_event = on_event
         self.audio_queue = asyncio.Queue(maxsize=128)
-        url = f"{_QWEN_REALTIME_WS}?model={self.model}"
+        url = f"{self.realtime_url}?model={self.model}"
         self.ws = await websockets.connect(url, **_connect_kwargs(self.api_key))
         tgt = (config.target_language or "zh").lower()
         session = {
@@ -486,6 +539,11 @@ class QwenAsrTtsEngine:
                 if et == "error":
                     self._emit("error", message=f"qwen error: {msg.get('error', {})}")
                     continue
+                if et == "response.done":
+                    usage = _qwen_usage_from_message(msg)
+                    if usage:
+                        self._emit("status", message=f"[qwen-realtime-usage] {usage}")
+                    continue
                 if et == "conversation.item.input_audio_transcription.delta":
                     d = msg.get("delta") or ""
                     if d:
@@ -509,7 +567,7 @@ class QwenAsrTtsEngine:
             self._emit("error", message=f"qwen recv failed: {exc}")
 
     async def _run_tts(self, text: str, segment_id: int) -> None:
-        cfg = QwenTtsConfig(api_key=self.api_key, voice=self.voice)
+        cfg = QwenTtsConfig(api_key=self.api_key, voice=self.voice, realtime_url=self.realtime_url)
 
         def on_pcm(data: bytes) -> None:
             self._emit("translated_audio", data=data, segment_id=segment_id)
@@ -541,6 +599,7 @@ class QwenTtsConfig:
     voice: str = "Cherry"
     sample_rate: int = 24000
     model: str = _QWEN_TTS_MODEL
+    realtime_url: str = _QWEN_REALTIME_WS
 
 
 async def qwen_tts_stream(
@@ -553,7 +612,7 @@ async def qwen_tts_stream(
         raise RuntimeError("未配置 Qwen API Key")
     if not text:
         return
-    url = f"{_QWEN_REALTIME_WS}?model={cfg.model}"
+    url = f"{(cfg.realtime_url or _QWEN_REALTIME_WS)}?model={cfg.model}"
     ws = await websockets.connect(url, **_connect_kwargs(cfg.api_key))
     try:
         session = {
@@ -590,7 +649,10 @@ async def qwen_tts_stream(
                         on_pcm(base64.b64decode(b64))
                     except Exception:
                         pass
-            elif et in ("response.done", "response.audio.done"):
+            elif et == "response.done":
+                _emit_qwen_usage(on_status, "qwen-tts-usage", _qwen_usage_from_message(msg))
+                break
+            elif et == "response.audio.done":
                 break
             elif et == "error":
                 err = msg.get("error", {})

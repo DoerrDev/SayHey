@@ -95,12 +95,14 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
         cfg = _config(simultaneous_interpretation_enabled=True)
         cfg.engine_name = "qwen"
         cfg.speaker_id = "Tina"
+        cfg.ws_url = "wss://proxy.example/realtime"
         controller = VoiceTranslatorController(cfg)
 
         engine = controller._build_engine()
 
         self.assertIsInstance(engine, QwenLiveTranslateEngine)
         self.assertEqual(engine.voice, "Tina")
+        self.assertEqual(engine.realtime_url, "wss://proxy.example/realtime")
 
     def test_qwen_s2s_engine_uses_clone_when_voice_is_empty(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)
@@ -171,6 +173,28 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
         controller = VoiceTranslatorController(cfg)
 
         self.assertEqual(controller._translated_audio_sample_rate(), 24000)
+
+    def test_qwen_response_done_emits_usage_status(self) -> None:
+        engine = QwenLiveTranslateEngine(api_key="key")
+        events = []
+        engine.on_event = events.append
+
+        engine._handle_event({
+            "type": "response.done",
+            "response": {
+                "usage": {
+                    "total_tokens": 12,
+                    "input_tokens_details": {"audio_tokens": 7},
+                    "output_tokens_details": {"text_tokens": 5},
+                }
+            },
+        })
+
+        messages = [e.message for e in events if e.type == "status"]
+        self.assertIn(
+            "[qwen-realtime-usage] {'total_tokens': 12, 'input_tokens_details': {'audio_tokens': 7}, 'output_tokens_details': {'text_tokens': 5}}",
+            messages,
+        )
 
     def test_huoshan_translated_audio_uses_config_sample_rate(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)
