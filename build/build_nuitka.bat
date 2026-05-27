@@ -55,7 +55,7 @@ if errorlevel 1 (
     exit /b 1
 )
 cd /d "%~dp0.."
-copy /Y "%~dp0..\tools\updater\build_out\updater.exe" "%FINAL_DIST_DIR%\updater.exe"
+copy /Y "%~dp0..\tools\updater\build_out\updater_app.exe" "%FINAL_DIST_DIR%\updater_app.exe"
 if errorlevel 1 (
     echo [SayHey] Copy updater.exe FAILED.
     pause

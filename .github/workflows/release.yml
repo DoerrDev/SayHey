@@ -69,7 +69,7 @@ jobs:
           python -m nuitka ^
             --standalone --onefile ^
             --windows-console-mode=disable ^
-            --output-filename=updater.exe ^
+            --output-filename=updater_app.exe ^
             --output-dir=build_out ^
             updater.py
 
@@ -79,7 +79,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if (Test-Path dist\sayhey) { Remove-Item -Recurse -Force dist\sayhey }
           Move-Item dist\main.dist dist\sayhey
-          Copy-Item tools\updater\build_out\updater.exe dist\sayhey\updater.exe -Force
+          Copy-Item tools\updater\build_out\updater_app.exe dist\sayhey\updater_app.exe -Force
           if (Test-Path dist\sayhey-windows.zip) { Remove-Item -Force dist\sayhey-windows.zip }
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           [System.IO.Compression.ZipFile]::CreateFromDirectory(

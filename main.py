@@ -14,7 +14,24 @@ from gui.theme import apply_theme
 from core.settings_store import SettingsStore
 
 
+def _cleanup_old_updater() -> None:
+    if not (_APP_ROOT / "updater_app.exe").exists():
+        return
+    old = _APP_ROOT / "updater.exe"
+    try:
+        if old.exists():
+            old.unlink()
+    except OSError:
+        pass
+    for bak in _APP_ROOT.glob("*.old"):
+        try:
+            bak.unlink()
+        except OSError:
+            pass
+
+
 def main() -> None:
+    _cleanup_old_updater()
     app = create_app()
     icon_path = _APP_ROOT / "resource" / "app-icon.ico"
     if icon_path.exists():

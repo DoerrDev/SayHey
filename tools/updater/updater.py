@@ -53,8 +53,10 @@ def wait_pid(pid: int, timeout: float = 30.0) -> bool:
     return False
 
 
-def apply_zip(zip_path: Path, target: Path) -> None:
+def apply_zip(zip_path: Path, target: Path) -> list[str]:
     target.mkdir(parents=True, exist_ok=True)
+    self_exe = Path(sys.executable).resolve()
+    skipped: list[str] = []
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
         common = None
@@ -79,8 +81,23 @@ def apply_zip(zip_path: Path, target: Path) -> None:
                 continue
             dst = target / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(name) as src, open(dst, "wb") as out:
-                shutil.copyfileobj(src, out)
+            if dst.resolve() == self_exe:
+                skipped.append(rel)
+                continue
+            try:
+                with zf.open(name) as src, open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out)
+            except PermissionError:
+                try:
+                    bak = dst.with_suffix(dst.suffix + ".old")
+                    if bak.exists():
+                        bak.unlink()
+                    os.replace(dst, bak)
+                    with zf.open(name) as src, open(dst, "wb") as out:
+                        shutil.copyfileobj(src, out)
+                except OSError:
+                    skipped.append(rel)
+    return skipped
 
 
 def main() -> None:
@@ -99,8 +116,8 @@ def main() -> None:
     time.sleep(1.0)
 
     try:
-        apply_zip(Path(a.zip), target)
-        _log(target, "apply ok")
+        skipped = apply_zip(Path(a.zip), target)
+        _log(target, f"apply ok, skipped={skipped}")
     except Exception as e:
         _log(target, f"FAIL: {e}")
         sys.exit(1)

@@ -116,7 +116,9 @@ class UpdateDialog(QDialog):
             return
         exe = Path(sys.executable)
         exe_dir = exe.parent
-        updater = exe_dir / "updater.exe"
+        updater = exe_dir / "updater_app.exe"
+        if not updater.exists():
+            updater = exe_dir / "updater.exe"
         if not updater.exists():
             QMessageBox.critical(
                 self,
