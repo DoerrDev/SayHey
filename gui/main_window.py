@@ -125,6 +125,15 @@ class MainWindow(QMainWindow):
         self._game_panel.set_advanced(show)
         self._store.save(replace(self._store.get(), show_advanced_panel=show))
 
+    def _show_si_hotword_info_once(self) -> None:
+        if self._store.get().si_hotword_info_shown:
+            return
+        from gui.hotword_usage_dialog import HotwordUsageDialog
+        dlg = HotwordUsageDialog(self)
+        dlg.exec()
+        if dlg.dont_show_again():
+            self._store.save(replace(self._store.get(), si_hotword_info_shown=True))
+
     def _build_layout(self) -> None:
         central = QWidget()
         self.setCentralWidget(central)
@@ -299,7 +308,11 @@ class MainWindow(QMainWindow):
             cable_input_name=s.vb_cable_input_name,
             engine_name=s.translator_engine,
             qwen_mt=QwenMtConfig(api_key=s.qwen_api_key, base_url=s.qwen_base_url),
-            qwen_tts=QwenTtsConfig(api_key=s.qwen_api_key, voice=s.qwen_s2s_speaker_id or "Cherry"),
+            qwen_tts=QwenTtsConfig(
+                api_key=s.qwen_api_key,
+                voice=s.qwen_s2s_speaker_id or "Cherry",
+                realtime_url=s.qwen_ws_url,
+            ),
             hotwords=self._load_hotwords(self._typed_panel.selected_hotword_set()),
         )
         if self._typed_controller is None:
@@ -420,9 +433,9 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self, s: AppSettings) -> None:
         is_qwen = s.translator_engine == "qwen"
-        self._header.set_usage_visible(s.usage_tracking_enabled and not is_qwen)
+        self._header.set_usage_visible(s.usage_tracking_enabled)
         self._header.set_usage_mode(s.usage_chip_show_token)
-        if s.usage_tracking_enabled and not is_qwen:
+        if s.usage_tracking_enabled:
             st = self._usage_tracker.state
             self._header.set_usage(st.session_cost, st.total_cost, st.session_tokens, st.total_tokens)
         self._mic_panel.set_mic_by_index(s.mic_input_index)
@@ -521,6 +534,9 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "配置错误", str(exc))
             return
+
+        if simultaneous_enabled:
+            self._show_si_hotword_info_once()
 
         self._mic_panel.set_running(True)
         self._header.set_status("翻译启动中...", "warn")
@@ -626,6 +642,8 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "游戏字幕配置错误", str(exc))
             return
+
+        self._show_si_hotword_info_once()
 
         self._game_panel.set_running(True)
         self._header.set_status("游戏字幕启动中...", "warn")

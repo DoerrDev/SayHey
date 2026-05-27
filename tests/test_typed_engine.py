@@ -4,7 +4,7 @@ from io import BytesIO
 from unittest.mock import patch
 from urllib.error import HTTPError
 
-from app_core.qwen_engine import QwenTtsConfig
+from app_core.qwen_engine import QwenMtConfig, QwenTtsConfig, qwen_mt_translate
 from app_core.typed_engine import (
     DoubaoTranslateConfig,
     doubao_translate_text,
@@ -27,6 +27,20 @@ class _FakeResponse:
             "code": 20000000,
             "message": "ok",
             "data": {"translation_list": [{"translation": "hello"}]},
+        }).encode("utf-8")
+
+
+class _FakeQwenResponse:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps({
+            "output": {"text": "hello"},
+            "usage": {"input_tokens": 10, "output_tokens": 1, "total_tokens": 11},
         }).encode("utf-8")
 
 
@@ -90,6 +104,26 @@ class TypedEngineTests(unittest.TestCase):
         cfg = QwenTtsConfig(api_key="key", voice="Katerina")
 
         self.assertEqual(cfg.model, "qwen3-tts-flash-realtime")
+
+    def test_qwen_mt_only_sends_matching_hotwords(self) -> None:
+        captured = {}
+
+        def fake_urlopen(req, timeout):
+            captured["body"] = json.loads(req.data.decode("utf-8"))
+            return _FakeQwenResponse()
+
+        hotwords = {"贤者": "Sage", "捷风": "Jett", "幽影": "Omen"}
+        with patch("app_core.qwen_engine.request.urlopen", fake_urlopen):
+            qwen_mt_translate(QwenMtConfig(api_key="key"), "你好，你是哪里人", "zh", "en", hotwords=hotwords)
+
+        options = captured["body"]["parameters"]["translation_options"]
+        self.assertNotIn("terms", options)
+
+        with patch("app_core.qwen_engine.request.urlopen", fake_urlopen):
+            qwen_mt_translate(QwenMtConfig(api_key="key"), "贤者在哪里", "zh", "en", hotwords=hotwords)
+
+        options = captured["body"]["parameters"]["translation_options"]
+        self.assertEqual(options["terms"], [{"source": "贤者", "target": "Sage"}])
 
 
 if __name__ == "__main__":

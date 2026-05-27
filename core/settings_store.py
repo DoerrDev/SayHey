@@ -59,8 +59,10 @@ class AppSettings:
     show_advanced_panel: bool = False
     advanced_audio_warning_shown: bool = False
     zh_to_zh_info_shown: bool = False
+    si_hotword_info_shown: bool = False
     qwen_api_key: str = ""
     qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    qwen_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
     qwen_s2s_speaker_id: str = ""
     mic_hotword_set: str = ""
     typed_hotword_set: str = ""
@@ -138,6 +140,9 @@ class SettingsStore:
             game_subtitle_target_language=get("GAME_SUBTITLE_TARGET_LANGUAGE", "zh"),
             mic_input_index=mic_idx,
             game_audio_device_name=get("GAME_AUDIO_DEVICE_NAME"),
+            qwen_api_key=get("QWEN_API_KEY"),
+            qwen_base_url=get("QWEN_BASE_URL", "https://dashscope.aliyuncs.com/api/v1"),
+            qwen_ws_url=get("QWEN_WS_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"),
         )
 
     def _sync_to_environ(self, s: AppSettings) -> None:
@@ -156,6 +161,7 @@ class SettingsStore:
             "TRANSLATOR_ENGINE": s.translator_engine,
             "QWEN_API_KEY": s.qwen_api_key,
             "QWEN_BASE_URL": s.qwen_base_url,
+            "QWEN_WS_URL": s.qwen_ws_url,
             "QWEN_S2S_SPEAKER_ID": s.qwen_s2s_speaker_id,
             "S2S_SOURCE_LANGUAGE": s.s2s_source_language,
             "S2S_TARGET_LANGUAGE": s.s2s_target_language,

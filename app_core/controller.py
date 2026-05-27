@@ -226,8 +226,14 @@ class VoiceTranslatorController:
                 return QwenAsrTtsEngine(
                     api_key=self.config.api_key,
                     voice=voice or "Cherry",
+                    realtime_url=self.config.ws_url,
                 )
-            return QwenLiveTranslateEngine(api_key=self.config.api_key, mode="s2s", voice=voice or "default")
+            return QwenLiveTranslateEngine(
+                api_key=self.config.api_key,
+                mode="s2s",
+                voice=voice or "default",
+                realtime_url=self.config.ws_url,
+            )
         return VolcAstS2SEngine(
             ws_url=self.config.ws_url,
             api_key=self.config.api_key,
@@ -347,11 +353,13 @@ def build_app_config(env_path: Path) -> AppConfig:
         engine_name = "huoshan"
     if engine_name == "qwen":
         api_key = os.environ.get("QWEN_API_KEY", "").strip()
+        ws_url = os.environ.get("QWEN_WS_URL", "wss://dashscope.aliyuncs.com/api-ws/v1/realtime").strip()
     else:
         api_key = os.environ.get("VOLC_APP_KEY", "").strip() or os.environ.get("VOLC_API_KEY", "").strip()
+        ws_url = os.environ.get("VOLC_WS_URL", "").strip()
     sample_rate = int(os.environ.get("S2S_SAMPLE_RATE", "16000").strip())
     return AppConfig(
-        ws_url=os.environ.get("VOLC_WS_URL", "").strip(),
+        ws_url=ws_url,
         api_key=api_key,
         resource_id=os.environ.get("VOLC_RESOURCE_ID", "volc.service_type.10053").strip(),
         source_language=os.environ.get("S2S_SOURCE_LANGUAGE", "").strip()
