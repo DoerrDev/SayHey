@@ -48,6 +48,7 @@ jobs:
             --include-package=core ^
             --include-package=python_protogen ^
             --include-data-dir=resource=resource ^
+            --include-data-dir=hotwords=hotwords ^
             --include-module=sounddevice ^
             --include-module=soundcard ^
             --include-package-data=soundcard ^
@@ -87,26 +88,42 @@ jobs:
             [System.IO.Compression.CompressionLevel]::Optimal, $false)
           Get-Item dist\sayhey-windows.zip | Select-Object FullName, Length
 
+      - name: Prepare release notes
+        id: notes
+        shell: bash
+        run: |
+          if [ -s resource/release_log.md ]; then
+            echo "path=resource/release_log.md" >> "$GITHUB_OUTPUT"
+            echo "gen=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "gen=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub Release
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/sayhey-windows.zip
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.gen }}
           draft: false
           prerelease: false
 
       - name: Push mirror to Gitee
+        continue-on-error: true
         shell: bash
         env:
           GITEE_USER: ${{ secrets.GITEE_USER }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           git remote add gitee "https://${GITEE_USER}:${GITEE_TOKEN}@gitee.com/chenjunbin2345/SayHey.git"
-          git push gitee HEAD:main --force
-          git push gitee "${GITHUB_REF}" --force
+          git config --global http.postBuffer 524288000
+          for i in 1 2 3; do git push gitee HEAD:main --force && break || sleep 10; done
+          for i in 1 2 3; do git push gitee "${GITHUB_REF}" --force && break || sleep 10; done
 
       - name: Mirror release to Gitee
+        continue-on-error: true
         shell: bash
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -118,7 +135,9 @@ jobs:
           NOTES="${GH_RELEASE_BODY:-Auto release $TAG}"
 
           # 1) create gitee release
-          RID=$(curl -sf -X POST "https://gitee.com/api/v5/repos/${REPO}/releases" \
+          RID=$(curl -sf --retry 5 --retry-delay 10 --retry-all-errors \
+            --connect-timeout 30 --max-time 120 \
+            -X POST "https://gitee.com/api/v5/repos/${REPO}/releases" \
             -H "Content-Type: application/json;charset=UTF-8" \
             -d "$(jq -nc --arg t "$GITEE_TOKEN" --arg tag "$TAG" --arg name "$TAG" \
                           --arg body "$NOTES" --arg br "main" \
@@ -128,7 +147,9 @@ jobs:
           echo "Gitee release id: $RID"
 
           # 2) upload zip asset
-          curl -sf -X POST \
+          curl -sf --retry 5 --retry-delay 15 --retry-all-errors \
+            --connect-timeout 30 --max-time 1800 \
+            -X POST \
             "https://gitee.com/api/v5/repos/${REPO}/releases/${RID}/attach_files" \
             -F "access_token=${GITEE_TOKEN}" \
             -F "file=@dist/sayhey-windows.zip"

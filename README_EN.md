@@ -29,15 +29,20 @@ If you just want to try it:
 ## Features
 
 ### Translation & subtitles
-- Real-time microphone interpretation (Doubao end-to-end speech model)
-- System audio overlay subtitles (WASAPI loopback capture)
-- Typed translation → text-to-speech output
+- Real-time microphone interpretation (Doubao / Qwen end-to-end speech models)
+- System audio overlay subtitles (WASAPI loopback capture) — keeps more history lines to avoid flicker
+- Typed translation → text-to-speech output; same-language input auto-skips translation and goes straight to TTS
 - Optional: show source text alongside translated subtitles
-- Free choice of source / target languages
+- Multi-language translation with a unified LangPicker selector
+- Same-language scenarios (e.g. zh→zh) prompt a warning to avoid mis-operation
+
+### Hotword system
+- Custom hotword list to improve recognition of proper nouns, names, and game terms
+- Built-in hotword packs for common games — works out of the box
 
 ### Voice customization
-- Voice picker dialog with multiple Doubao / Seed TTS 2.0 voices, draggable preview window
-- Speech rate adjustment (-50 ~ +100)
+- Voice picker dialog with full Doubao / Seed TTS 2.0 / Qwen voice catalog, draggable preview
+- Speech rate adjustment (-50 ~ +100); auto-hidden when Qwen engine does not support it
 - Save translated audio to disk
 
 ### Hotkeys & on-screen hints
@@ -48,22 +53,31 @@ If you just want to try it:
 
 ### Devices & audio
 - One-click virtual sound card (VB-Cable) detection
-- Switch microphone / virtual sound card / subtitle audio source directly from the main panel
+- "Advanced" toggle on the main panel — virtual mic / audio source rows hidden by default to simplify daily use
+- Virtual loopback devices are hidden from the mic list by default to prevent self-feedback
+- Self-feedback device configurations are blocked before live interpretation starts
+- Auto-selects CABLE Input as the default output on first launch
 - Automatic conflict handling when game subtitles and live interpretation share the same virtual line
 
 ### Other
 - Built-in trial proxy (`trial.sayhey.top`) — no key required for first try
 - Usage tracking & billing (cumulative MT / TTS tokens)
-- Built-in feedback / feature-request entry, automatically attaches the app version
+- Built-in feedback entry with improved UI, automatically attaches the app version
 - Auto-update (GitHub / Gitee dual source)
+- Bundled MiSans font for consistent rendering across machines
 - Runtime log panel for latency and error inspection
 
 ## Engine Notes
 
-The underlying engine is primarily **Volcengine (Doubao)** real-time large-model speech services, powering all three pipelines: live interpretation, game subtitles, and typed translation.
+Two real-time large-model speech engines are supported, covering all three pipelines (live interpretation / subtitles / typed translation):
+
+- **Volcengine (Doubao)**: default engine, end-to-end real-time speech
+- **Qwen (Alibaba Tongyi)**: optional engine, additional voices and language options
+
+Usage:
 
 - First-time use: try directly with the built-in trial quota
-- Long-term use: bring your own Volcengine key
+- Long-term use: bring your own Volcengine or Qwen key
 
 Volcengine console shortcut:
 https://console.volcengine.com/speech/new/overview?projectName=default

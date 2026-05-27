@@ -23,6 +23,7 @@ python -m nuitka ^
     --include-package=core ^
     --include-package=python_protogen ^
     --include-data-dir=resource=resource ^
+    --include-data-dir=hotwords=hotwords ^
     --include-module=sounddevice ^
     --include-module=soundcard ^
     --include-package-data=soundcard ^
