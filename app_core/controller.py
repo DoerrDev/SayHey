@@ -38,6 +38,7 @@ class AppConfig:
     output_gain: float = 1.0
     engine_name: str = "huoshan"
     hotwords: dict = field(default_factory=dict)
+    noise_gate_threshold: float = 0.0
 
 
 class VoiceTranslatorController:
@@ -199,6 +200,7 @@ class VoiceTranslatorController:
                 on_audio=self._send_audio_from_callback,
                 on_status=self._emit_status,
                 on_speech_start=self._handle_speech_start,
+                noise_gate_threshold=self.config.noise_gate_threshold,
             )
             try:
                 source.start()
@@ -389,4 +391,5 @@ def build_app_config(env_path: Path) -> AppConfig:
         output_channels=int(os.environ.get("VB_CABLE_OUTPUT_CHANNELS", "2").strip()),
         output_gain=float(os.environ.get("S2S_OUTPUT_GAIN", "1.8" if engine_name == "qwen" else "1.0").strip()),
         engine_name=engine_name,
+        noise_gate_threshold=float(os.environ.get("MIC_NOISE_GATE", "0").strip() or "0"),
     )

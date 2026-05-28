@@ -43,6 +43,7 @@ class AudioInputSource:
         on_speech_start: Optional[SpeechStartCallback] = None,
         speech_threshold: float = 0.012,
         speech_cooldown_seconds: float = 1.2,
+        noise_gate_threshold: float = 0.0,
     ) -> None:
         self.device = device
         self.source_sample_rate = source_sample_rate
@@ -54,6 +55,7 @@ class AudioInputSource:
         self.on_speech_start = on_speech_start
         self.speech_threshold = speech_threshold
         self.speech_cooldown_seconds = speech_cooldown_seconds
+        self.noise_gate_threshold = max(0.0, float(noise_gate_threshold))
         self.stream: Optional[sd.InputStream] = None
         self.last_level_report = 0.0
         self.last_speech_start = 0.0
@@ -93,6 +95,8 @@ class AudioInputSource:
             self.on_status(f"[mic-level] {level:.4f}")
             self.last_level_report = now
         mono = self._resample_if_needed(mono)
+        if self.noise_gate_threshold > 0.0 and level < self.noise_gate_threshold:
+            mono = np.zeros_like(mono)
         self.on_audio(mono.tobytes())
 
     def _resample_if_needed(self, audio: np.ndarray) -> np.ndarray:

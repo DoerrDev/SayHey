@@ -60,6 +60,7 @@ class MicTranslatePanel(QFrame):
     sig_simultaneous_changed = Signal(bool)
     sig_zh_to_zh_selected = Signal()
     sig_hotword_changed = Signal(str)
+    sig_noise_gate_changed = Signal(float)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -136,6 +137,38 @@ class MicTranslatePanel(QFrame):
         sim_row.addWidget(self._speech_rate_label)
         sim_row.addStretch(1)
         layout.addLayout(sim_row)
+
+        # Noise gate row: silence mic input below threshold (helps with headphone bleed / room noise)
+        gate_tip = (
+            "低于此音量的麦克风输入会被静音，不送去识别。\n"
+            "如果发现队友的声音也被翻译了，可能是麦克风太灵敏，把耳机里的声音也收进去了，"
+            "可以把这个值调高一点（比如 0.03 ~ 0.05）。\n"
+            "如果把自己说话也门掉了，说明设得太高，调小一点。\n"
+            "0 表示关闭门控。"
+        )
+        gate_row = QHBoxLayout()
+        gate_row.setSpacing(10)
+        gate_label = QLabel("噪声门")
+        gate_label.setObjectName("routeLabel")
+        gate_label.setToolTip(gate_tip)
+        gate_row.addWidget(gate_label)
+        self._noise_gate_slider = QSlider(Qt.Orientation.Horizontal)
+        self._noise_gate_slider.setRange(0, 100)
+        self._noise_gate_slider.setFixedWidth(180)
+        self._noise_gate_slider.setToolTip(gate_tip)
+        self._noise_gate_slider.valueChanged.connect(self._on_noise_gate_changed)
+        gate_row.addWidget(self._noise_gate_slider)
+        self._noise_gate_value_label = QLabel("0.020")
+        self._noise_gate_value_label.setObjectName("routeLabel")
+        self._noise_gate_value_label.setMinimumWidth(48)
+        gate_row.addWidget(self._noise_gate_value_label)
+        gate_hint = QLabel("队友声音被翻译？调高一点")
+        gate_hint.setObjectName("routeLabel")
+        gate_hint.setStyleSheet("color: #8aa0b5; font-size: 11px;")
+        gate_hint.setToolTip(gate_tip)
+        gate_row.addWidget(gate_hint)
+        gate_row.addStretch(1)
+        layout.addLayout(gate_row)
 
         # Compact language row: [src] → [tgt]
         lang_row = QHBoxLayout()
@@ -374,6 +407,7 @@ class MicTranslatePanel(QFrame):
         self._speech_rate.setEnabled(not running)
         self._src_lang_combo.setEnabled(not running)
         self._tgt_lang_combo.setEnabled(not running)
+        self._noise_gate_slider.setEnabled(not running)
         self.sig_running_changed.emit(running)
         if not running:
             self._source_buffer.reset()
@@ -398,6 +432,19 @@ class MicTranslatePanel(QFrame):
     @Slot(int)
     def _on_simultaneous_changed(self, state: int) -> None:
         self.sig_simultaneous_changed.emit(bool(state))
+
+    @Slot(int)
+    def _on_noise_gate_changed(self, value: int) -> None:
+        threshold = value / 1000.0
+        self._noise_gate_value_label.setText(f"{threshold:.3f}")
+        self.sig_noise_gate_changed.emit(threshold)
+
+    def selected_noise_gate(self) -> float:
+        return self._noise_gate_slider.value() / 1000.0
+
+    def set_noise_gate(self, threshold: float) -> None:
+        clamped = max(0.0, min(0.1, float(threshold)))
+        self._noise_gate_slider.setValue(int(round(clamped * 1000.0)))
 
     def set_route_text(self, text: str) -> None:
         self._route_label.setText(text)

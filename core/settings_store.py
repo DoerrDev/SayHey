@@ -24,6 +24,7 @@ class AppSettings:
     s2s_speaker_id: str = "zh_female_xiaohe_jupiter_bigtts"
     s2s_speech_rate: int = 0
     mic_simultaneous_interpretation_enabled: bool = True
+    mic_noise_gate_threshold: float = 0.02
     game_subtitle_source_language: str = "en"
     game_subtitle_target_language: str = "zh"
     mic_input_index: Optional[int] = None
@@ -216,6 +217,7 @@ class SettingsStore:
             "S2S_SPEAKER_ID": s.s2s_speaker_id,
             "S2S_SPEECH_RATE": str(s.s2s_speech_rate),
             "MIC_SIMULTANEOUS_INTERPRETATION": "1" if s.mic_simultaneous_interpretation_enabled else "0",
+            "MIC_NOISE_GATE": f"{float(s.mic_noise_gate_threshold):.4f}",
             "GAME_SUBTITLE_SOURCE_LANGUAGE": s.game_subtitle_source_language,
             "GAME_SUBTITLE_TARGET_LANGUAGE": s.game_subtitle_target_language,
             "GAME_AUDIO_DEVICE_NAME": s.game_audio_device_name,
