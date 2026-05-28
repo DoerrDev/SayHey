@@ -24,6 +24,17 @@ _VOICE_JSON_PATH = Path(__file__).resolve().parent.parent / "resource" / "volc_v
 
 S2S_VOICE_TYPES = {"zh_female_vv_uranus_bigtts", "zh_male_jingqiangkanye_emo_mars_bigtts"}
 
+
+def voice_is_s2s(engine: str, speaker_id: str) -> bool | None:
+    sid = (speaker_id or "").strip()
+    if not sid:
+        return None
+    if engine == "qwen":
+        from app_core.qwen_voices import QWEN_VOICE_BY_ID
+        v = QWEN_VOICE_BY_ID.get(sid)
+        return v.is_s2s if v else None
+    return sid in S2S_VOICE_TYPES
+
 _LANG_LABEL = {
     "zh-cn": ("🇨🇳", "中文"),
     "en": ("🇺🇸", "英语"),

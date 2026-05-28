@@ -39,7 +39,7 @@ from core.bridge import TypedTranslateThread
 from gui.feedback_dialog import FeedbackDialog
 from gui.settings_dialog import SettingsDialog
 from gui.usage_dialog import UsageDialog
-from gui.voice_selector_dialog import VoiceSelectorDialog
+from gui.voice_selector_dialog import VoiceSelectorDialog, voice_is_s2s
 from core.usage_tracker import UsageTracker
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -322,6 +322,18 @@ class MainWindow(QMainWindow):
         return self._typed_controller
 
     @Slot(str)
+    def _validate_voice_for_mode(self, engine: str, speaker_id: str, expects_s2s: bool) -> bool:
+        is_s2s = voice_is_s2s(engine, speaker_id)
+        if is_s2s is None:
+            return True
+        if expects_s2s and not is_s2s:
+            QMessageBox.warning(self, "音色不匹配", "当前为同声传译模式，请选择标有「同传可用」的同声传译音色。")
+            return False
+        if not expects_s2s and is_s2s:
+            QMessageBox.warning(self, "音色不匹配", "当前模式不支持同声传译音色，请选择普通 TTS 音色。")
+            return False
+        return True
+
     def _on_typed_submit(self, text: str) -> None:
         self._run_typed(text, from_float=False)
 
@@ -332,6 +344,12 @@ class MainWindow(QMainWindow):
     def _run_typed(self, text: str, from_float: bool) -> None:
         if self._typed_busy:
             return
+        if self._typed_panel.auto_tts():
+            s = self._store.get()
+            engine = s.translator_engine
+            speaker_id = s.qwen_s2s_speaker_id if engine == "qwen" else s.s2s_speaker_id
+            if not self._validate_voice_for_mode(engine, speaker_id, expects_s2s=False):
+                return
         try:
             controller = self._build_typed_controller()
         except Exception as exc:
@@ -495,6 +513,11 @@ class MainWindow(QMainWindow):
         if simultaneous_enabled and src_lang == tgt_lang and src_lang != "auto" and src_lang != "zh":
             QMessageBox.warning(self, "语言设置", "源语言和目标语言不能相同")
             return
+
+        if simultaneous_enabled:
+            zh_to_zh = src_lang == "zh" and tgt_lang == "zh"
+            if not self._validate_voice_for_mode(engine, speaker_id, expects_s2s=not zh_to_zh):
+                return
 
         try:
             config = build_app_config(_ENV_PATH)
