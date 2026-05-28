@@ -63,6 +63,8 @@ class AppSettings:
     qwen_api_key: str = ""
     qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
     qwen_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    qwen_trial_base_url: str = "https://trial.sayhey.top/api/qwen"
+    qwen_trial_ws_url: str = "wss://trial.sayhey.top/api/qwen/realtime"
     qwen_s2s_speaker_id: str = ""
     mic_hotword_set: str = ""
     typed_hotword_set: str = ""
@@ -94,6 +96,13 @@ class SettingsStore:
                 s = AppSettings(**filtered)
             except Exception:
                 s = self._bootstrap_from_env()
+            migrated = self._migrate_qwen_trial(s)
+            if migrated is not None:
+                s = migrated
+                self._path.write_text(
+                    json.dumps(asdict(s), indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
         else:
             s = self._bootstrap_from_env()
             self._path.write_text(
@@ -102,6 +111,41 @@ class SettingsStore:
             )
         self._sync_to_environ(s)
         return s
+
+    @staticmethod
+    def _migrate_qwen_trial(s: AppSettings) -> Optional[AppSettings]:
+        """Recover configs polluted by the old Qwen-trial flow that wrote the trial
+        token / proxy URLs directly into the user's own qwen_* fields. Move those
+        values back into the dedicated trial fields and restore DashScope defaults.
+        Returns a new AppSettings if migration happened, else None.
+        """
+        _TRIAL_HOST = "trial.sayhey.top"
+        polluted = any(
+            _TRIAL_HOST in (v or "")
+            for v in (s.qwen_api_key, s.qwen_base_url, s.qwen_ws_url)
+        )
+        if not polluted:
+            return None
+        from dataclasses import replace
+
+        changes: dict[str, object] = {}
+        if _TRIAL_HOST in (s.qwen_ws_url or ""):
+            changes["qwen_trial_ws_url"] = s.qwen_ws_url
+            changes["qwen_ws_url"] = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+        if _TRIAL_HOST in (s.qwen_base_url or ""):
+            changes["qwen_trial_base_url"] = s.qwen_base_url
+            changes["qwen_base_url"] = "https://dashscope.aliyuncs.com/api/v1"
+        # qwen_api_key was overwritten with the trial token (trial tokens are not
+        # DashScope "sk-" keys). Move it into the shared trial token slot and clear
+        # the user's own key field so they can re-enter their real key.
+        if not (s.qwen_api_key or "").startswith("sk-"):
+            token = s.qwen_api_key
+            changes["qwen_api_key"] = ""
+            if token and not s.volc_trial_token:
+                changes["volc_trial_token"] = token
+            if token:
+                changes["volc_trial_enabled"] = True
+        return replace(s, **changes)
 
     def _bootstrap_from_env(self) -> AppSettings:
         env: dict[str, str] = {}
@@ -149,6 +193,10 @@ class SettingsStore:
         use_trial = bool(s.volc_trial_enabled and s.volc_trial_token) and s.translator_engine != "qwen"
         effective_api_key = s.volc_trial_token if use_trial else s.volc_api_key
         effective_ws_url = s.volc_trial_proxy_ws_url if use_trial else s.volc_ws_url
+        qwen_trial = bool(s.volc_trial_enabled and s.volc_trial_token) and s.translator_engine == "qwen"
+        qwen_api_key = s.volc_trial_token if qwen_trial else s.qwen_api_key
+        qwen_base_url = s.qwen_trial_base_url if qwen_trial else s.qwen_base_url
+        qwen_ws_url = s.qwen_trial_ws_url if qwen_trial else s.qwen_ws_url
         overrides: dict[str, str] = {
             "VOLC_APP_KEY": effective_api_key,
             "VOLC_API_KEY": effective_api_key,
@@ -159,9 +207,9 @@ class SettingsStore:
             "VB_CABLE_INPUT_NAME": s.vb_cable_input_name,
             "VB_CABLE_OUTPUT_NAME": s.vb_cable_output_name,
             "TRANSLATOR_ENGINE": s.translator_engine,
-            "QWEN_API_KEY": s.qwen_api_key,
-            "QWEN_BASE_URL": s.qwen_base_url,
-            "QWEN_WS_URL": s.qwen_ws_url,
+            "QWEN_API_KEY": qwen_api_key,
+            "QWEN_BASE_URL": qwen_base_url,
+            "QWEN_WS_URL": qwen_ws_url,
             "QWEN_S2S_SPEAKER_ID": s.qwen_s2s_speaker_id,
             "S2S_SOURCE_LANGUAGE": s.s2s_source_language,
             "S2S_TARGET_LANGUAGE": s.s2s_target_language,
