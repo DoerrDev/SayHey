@@ -79,7 +79,7 @@ class SubtitleBuffer:
         if current:
             cur_parts = _split_for_display(current)
             keep = max(0, self._max_lines - len(cur_parts))
-            visible = committed[-keep:] + cur_parts if keep else cur_parts
+            visible = (committed[-keep:] + cur_parts if keep else cur_parts)[-self._max_lines:]
         else:
             visible = committed[-self._max_lines:]
         self._on_display("\n".join(visible))
