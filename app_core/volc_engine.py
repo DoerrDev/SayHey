@@ -107,6 +107,7 @@ class VolcAstS2SEngine:
             "X-Api-App-Key": self.api_key,
             "X-Api-Resource-Id": self.resource_id,
             "X-Api-Connect-Id": self.connection_id,
+            "X-Api-Feature": "s2s",
         }
         kwargs = {"max_size": 16 * 1024 * 1024, "ping_interval": None}
         connect_signature = inspect.signature(websockets.connect)

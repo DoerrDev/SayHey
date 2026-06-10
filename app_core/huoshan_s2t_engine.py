@@ -99,6 +99,7 @@ class HuoshanS2TSubtitleEngine:
             "X-Api-App-Key": self.api_key,
             "X-Api-Resource-Id": self.resource_id,
             "X-Api-Connect-Id": self.connection_id,
+            "X-Api-Feature": "game-s2t",
         }
         kwargs = {"max_size": 16 * 1024 * 1024, "ping_interval": None}
         connect_signature = inspect.signature(websockets.connect)
