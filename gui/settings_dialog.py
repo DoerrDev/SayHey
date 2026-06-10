@@ -500,12 +500,12 @@ class SettingsDialog(QDialog):
 
         ws_url = self._volc_trial_proxy_ws_url.text().strip()
         if self._engine_value == "qwen":
+            # Only normalize the trial-proxy WS field — leave the user's own Qwen
+            # Base/WS URL fields untouched.
             if not ws_url or LEGACY_TRIAL_HOST in ws_url or "/api/v4/ast/" in ws_url:
                 self._volc_trial_proxy_ws_url.setText(QWEN_TRIAL_WS_DEFAULT)
-            if not self._qwen_base_url.text().strip() or LEGACY_TRIAL_HOST in self._qwen_base_url.text().strip():
-                self._qwen_base_url.setText(QWEN_TRIAL_BASE_DEFAULT)
-            if not self._qwen_ws_url.text().strip() or LEGACY_TRIAL_HOST in self._qwen_ws_url.text().strip():
-                self._qwen_ws_url.setText(QWEN_TRIAL_WS_DEFAULT)
+            if not getattr(self, "_qwen_trial_base_url", ""):
+                self._qwen_trial_base_url = QWEN_TRIAL_BASE_DEFAULT
         else:
             if not ws_url or LEGACY_TRIAL_HOST in ws_url or "/api/qwen/" in ws_url:
                 self._volc_trial_proxy_ws_url.setText(VOLC_TRIAL_WS_DEFAULT)
@@ -728,14 +728,14 @@ class SettingsDialog(QDialog):
         qwen_ws_url = data.get("qwen_ws_url", "")
         self._volc_trial_token.setText(token)
         if self._engine_value == "qwen":
+            # Keep the trial token + proxy URLs in dedicated trial state only — never
+            # touch the user's own Qwen Key/Base/WS fields.
             if qwen_ws_url:
                 self._volc_trial_proxy_ws_url.setText(qwen_ws_url)
+            if qwen_base_url:
+                self._qwen_trial_base_url = qwen_base_url
         elif proxy_url:
             self._volc_trial_proxy_ws_url.setText(proxy_url)
-        if token and qwen_base_url and qwen_ws_url:
-            self._qwen_api_key.setText(token)
-            self._qwen_base_url.setText(qwen_base_url)
-            self._qwen_ws_url.setText(qwen_ws_url)
         self._volc_trial_enabled.setChecked(True)
         self._set_trial_balance_text(data)
         QMessageBox.information(self, "申请成功", "Token 已写入，请记得点击「保存」生效。")
@@ -796,6 +796,7 @@ class SettingsDialog(QDialog):
         self._qwen_api_key.setText(s.qwen_api_key)
         self._qwen_base_url.setText(s.qwen_base_url)
         self._qwen_ws_url.setText(s.qwen_ws_url)
+        self._qwen_trial_base_url = s.qwen_trial_base_url
         self._engine_value = "qwen" if s.translator_engine == "qwen" else "huoshan"
         self._refresh_engine_buttons()
         self._refresh_billing_content()
@@ -814,7 +815,12 @@ class SettingsDialog(QDialog):
 
         self._volc_trial_enabled.setChecked(s.volc_trial_enabled)
         self._volc_trial_token.setText(s.volc_trial_token)
-        self._volc_trial_proxy_ws_url.setText(s.volc_trial_proxy_ws_url)
+        # In qwen mode the trial-proxy WS field shows the Qwen trial WS; otherwise the
+        # Volc trial WS.
+        if self._engine_value == "qwen":
+            self._volc_trial_proxy_ws_url.setText(s.qwen_trial_ws_url)
+        else:
+            self._volc_trial_proxy_ws_url.setText(s.volc_trial_proxy_ws_url)
         self._volc_trial_api_base.setText(s.volc_trial_api_base)
         self._refresh_trial_content()
 
@@ -835,14 +841,18 @@ class SettingsDialog(QDialog):
         from dataclasses import replace
         trial_ws = self._volc_trial_proxy_ws_url.text().strip()
         if self._engine_value == "qwen":
-            qwen_ws_url = trial_ws or self._qwen_ws_url.text().strip() or s.qwen_ws_url
+            # The trial-proxy WS field carries the Qwen trial WS in qwen mode; keep it
+            # in the dedicated qwen_trial_* fields, never in the user's own qwen_ws_url.
+            qwen_trial_ws_url = trial_ws or s.qwen_trial_ws_url
+            qwen_trial_base_url = getattr(self, "_qwen_trial_base_url", "") or s.qwen_trial_base_url
             volc_trial_proxy_ws_url = (
                 s.volc_trial_proxy_ws_url
                 if "/api/v4/ast/" in (s.volc_trial_proxy_ws_url or "")
                 else VOLC_TRIAL_WS_DEFAULT
             )
         else:
-            qwen_ws_url = self._qwen_ws_url.text().strip() or s.qwen_ws_url
+            qwen_trial_ws_url = s.qwen_trial_ws_url
+            qwen_trial_base_url = getattr(self, "_qwen_trial_base_url", "") or s.qwen_trial_base_url
             volc_trial_proxy_ws_url = trial_ws or s.volc_trial_proxy_ws_url
         return replace(
             s,
@@ -852,7 +862,9 @@ class SettingsDialog(QDialog):
             translator_engine=self._engine_value,
             qwen_api_key=self._qwen_api_key.text().strip(),
             qwen_base_url=self._qwen_base_url.text().strip() or s.qwen_base_url,
-            qwen_ws_url=qwen_ws_url,
+            qwen_ws_url=self._qwen_ws_url.text().strip() or s.qwen_ws_url,
+            qwen_trial_base_url=qwen_trial_base_url,
+            qwen_trial_ws_url=qwen_trial_ws_url,
             overlay_max_lines=self._overlay_max_lines.value(),
             overlay_font_size=self._overlay_font_size.value(),
             overlay_opacity=self._overlay_opacity.value() / 100.0,

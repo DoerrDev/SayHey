@@ -466,6 +466,7 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_speaker_id(s.qwen_s2s_speaker_id if is_qwen else s.s2s_speaker_id)
         self._mic_panel.set_simultaneous_interpretation_enabled(s.mic_simultaneous_interpretation_enabled)
         self._mic_panel.set_speech_rate(s.s2s_speech_rate)
+        self._mic_panel.set_noise_gate(s.mic_noise_gate_threshold)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
         self._game_panel.set_audio_devices(_list_speaker_names(), s.game_audio_device_name)
@@ -540,6 +541,7 @@ class MainWindow(QMainWindow):
             config.speaker_id = speaker_id
             config.simultaneous_interpretation_enabled = simultaneous_enabled
             config.speech_rate = speech_rate
+            config.noise_gate_threshold = self._mic_panel.selected_noise_gate()
             config.hotwords = self._load_hotwords(self._mic_panel.selected_hotword_set())
             self._store.save(
                 replace(
@@ -552,6 +554,7 @@ class MainWindow(QMainWindow):
                     s2s_speaker_id=speaker_id,
                     mic_simultaneous_interpretation_enabled=simultaneous_enabled,
                     s2s_speech_rate=speech_rate,
+                    mic_noise_gate_threshold=self._mic_panel.selected_noise_gate(),
                 )
             )
         except Exception as exc:
