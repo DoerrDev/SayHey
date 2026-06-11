@@ -517,8 +517,10 @@ class MainWindow(QMainWindow):
 
         if simultaneous_enabled:
             zh_to_zh = src_lang == "zh" and tgt_lang == "zh"
-            if not self._validate_voice_for_mode(engine, speaker_id, expects_s2s=not zh_to_zh):
-                return
+            if not zh_to_zh and voice_is_s2s(engine, speaker_id) is False:
+                speaker_id = ""
+                self._mic_panel.set_speaker_id("")
+                self._log_panel.append("当前音色非同传音色，已切换为默认模式")
 
         try:
             config = build_app_config(_ENV_PATH)
