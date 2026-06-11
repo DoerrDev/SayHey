@@ -59,6 +59,7 @@ class AudioInputSource:
         self.stream: Optional[sd.InputStream] = None
         self.last_level_report = 0.0
         self.last_speech_start = 0.0
+        self.first_frame_event = threading.Event()
 
     def start(self) -> None:
         blocksize = int(self.source_sample_rate * self.chunk_ms / 1000)
@@ -71,6 +72,12 @@ class AudioInputSource:
             callback=self._callback,
         )
         self.stream.start()
+        if not self.first_frame_event.wait(timeout=1.0):
+            self.stop()
+            raise RuntimeError(
+                f"未收到设备 #{self.device.index} {self.device.name} ({self.device.hostapi}) 的音频流，"
+                "该设备无效，请切换有效的麦克风设备"
+            )
 
     def stop(self) -> None:
         if self.stream is not None:
@@ -79,6 +86,8 @@ class AudioInputSource:
             self.stream = None
 
     def _callback(self, indata, frames, time_info, status) -> None:
+        if not self.first_frame_event.is_set():
+            self.first_frame_event.set()
         if status and self.on_status:
             self.on_status(f"[audio-status] {status}")
         mono = indata[:, 0].copy()

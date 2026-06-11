@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 import urllib.request
 from dataclasses import replace
+from pathlib import Path
+
+_LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "runtime.log"
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -229,6 +232,11 @@ class FeedbackDialog(QDialog):
         hint = QLabel("尽量写清场景、问题现象和你期待的结果。")
         hint.setObjectName("feedbackDialogTip")
         composer_layout.addWidget(hint)
+
+        log_hint = QLabel("如果遇到 bug，试着点一下「发送错误日志」按钮，会自动把运行日志整理发给开发者。")
+        log_hint.setObjectName("feedbackDialogTip")
+        log_hint.setWordWrap(True)
+        composer_layout.addWidget(log_hint)
         root.addWidget(composer)
 
         btns = QHBoxLayout()
@@ -239,6 +247,11 @@ class FeedbackDialog(QDialog):
         close_btn.setObjectName("secondary")
         close_btn.clicked.connect(self.accept)
         btns.addWidget(close_btn)
+
+        self._log_btn = QPushButton("发送错误日志")
+        self._log_btn.setObjectName("secondary")
+        self._log_btn.clicked.connect(self._on_send_log)
+        btns.addWidget(self._log_btn)
 
         self._send_btn = QPushButton("发送反馈")
         self._send_btn.clicked.connect(self._on_submit)
@@ -372,6 +385,42 @@ class FeedbackDialog(QDialog):
         self._thread = _NetThread(lambda: _api_post(f"{base}/api/feature-request", body), self)
         self._thread.sig_done.connect(self._on_submitted)
         self._thread.start()
+
+    def _read_log_tail(self, max_chars: int = 12000) -> str:
+        try:
+            text = _LOG_PATH.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        return text[-max_chars:]
+
+    def _on_send_log(self) -> None:
+        log_text = self._read_log_tail()
+        if not log_text.strip():
+            QMessageBox.information(self, "提示", "暂时没有可发送的运行日志。")
+            return
+        name = self._name_input.text().strip() or self._store.get().feedback_nickname or "用户"
+        note = self._msg_input.toPlainText().strip()
+        message = "【错误日志】\n" + (f"{note}\n\n" if note else "") + "------ runtime.log ------\n" + log_text
+
+        self._log_btn.setEnabled(False)
+        self._log_btn.setText("发送中...")
+        self._status_label.setText("正在发送日志")
+        base, mid = self._api_base, self._machine_id
+        body = {"name": name, "message": message, "machine_id_hash": mid}
+        self._log_send_thread = _NetThread(lambda: _api_post(f"{base}/api/feature-request", body), self)
+        self._log_send_thread.sig_done.connect(self._on_log_sent)
+        self._log_send_thread.start()
+
+    def _on_log_sent(self, ok: bool, payload: object) -> None:
+        self._log_btn.setEnabled(True)
+        self._log_btn.setText("发送错误日志")
+        if not ok:
+            self._status_label.setText("日志发送失败")
+            QMessageBox.critical(self, "发送失败", f"无法连接服务：\n{payload}")
+            return
+        self._status_label.setText("日志已发送")
+        QMessageBox.information(self, "已发送", "错误日志已发送给开发者，感谢反馈。")
+        self._load_history()
 
     def _on_submitted(self, ok: bool, payload: object) -> None:
         self._send_btn.setEnabled(True)

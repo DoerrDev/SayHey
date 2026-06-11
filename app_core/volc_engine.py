@@ -33,6 +33,11 @@ class VolcAstS2SEngine:
         self.receiver_task: Optional[asyncio.Task] = None
         self.audio_queue: Optional[asyncio.Queue[bytes | None]] = None
         self.dropped_audio_chunks = 0
+        self.enqueued_audio_chunks = 0
+        self.enqueued_audio_bytes = 0
+        self.sent_audio_chunks = 0
+        self.sent_audio_bytes = 0
+        self.received_frames = 0
         self.seen_source = ""
         self.seen_translation = ""
         self._source_acc = ""
@@ -58,6 +63,13 @@ class VolcAstS2SEngine:
             return
         try:
             self.audio_queue.put_nowait(pcm_bytes)
+            self.enqueued_audio_chunks += 1
+            self.enqueued_audio_bytes += len(pcm_bytes)
+            if self.enqueued_audio_chunks == 1 or self.enqueued_audio_chunks % 50 == 0:
+                self._emit(
+                    "status",
+                    message=f"[audio-enqueue] chunks={self.enqueued_audio_chunks} bytes={self.enqueued_audio_bytes} last={len(pcm_bytes)}",
+                )
         except asyncio.QueueFull:
             self.dropped_audio_chunks += 1
             try:
@@ -121,15 +133,30 @@ class VolcAstS2SEngine:
         assert self.ws is not None
         assert self.audio_queue is not None
         while True:
-            chunk = await self.audio_queue.get()
+            try:
+                chunk = await asyncio.wait_for(self.audio_queue.get(), timeout=2.0)
+            except asyncio.TimeoutError:
+                self._emit(
+                    "status",
+                    message=f"[audio-starve] no audio for 2s, sent={self.sent_audio_chunks} enqueued={self.enqueued_audio_chunks}",
+                )
+                continue
             if chunk is None:
                 try:
                     await self.ws.send(self._build_finish_request().SerializeToString())
+                    self._emit("status", message=f"[finish] sent total chunks={self.sent_audio_chunks} bytes={self.sent_audio_bytes}")
                 except Exception:
                     pass
                 break
             try:
                 await self.ws.send(self._build_audio_request(chunk).SerializeToString())
+                self.sent_audio_chunks += 1
+                self.sent_audio_bytes += len(chunk)
+                if self.sent_audio_chunks == 1 or self.sent_audio_chunks % 50 == 0:
+                    self._emit(
+                        "status",
+                        message=f"[audio-send] chunks={self.sent_audio_chunks} bytes={self.sent_audio_bytes}",
+                    )
             except Exception as exc:
                 self._emit("error", message=f"websocket send failed: {exc}")
                 break
@@ -139,6 +166,7 @@ class VolcAstS2SEngine:
         try:
             while True:
                 raw = await self.ws.recv()
+                self.received_frames += 1
                 if isinstance(raw, str):
                     self._emit("status", message=f"[text-frame] {raw}")
                     continue
