@@ -598,6 +598,8 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_running(False)
         self._mic_thread = None
         self._header.set_status("错误", "error")
+        if "token_in_use" in msg:
+            msg = "这个 token 已经被人占用啦（阿里一 token 一人的限制，建议切换火山引擎）"
         QMessageBox.critical(self, "运行错误", msg)
 
     def _is_cable_input_device(self, name: str) -> bool:
