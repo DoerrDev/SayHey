@@ -373,7 +373,7 @@ def build_app_config(env_path: Path) -> AppConfig:
             input_device_name=os.environ.get("MIC_INPUT_NAME", "").strip() or None,
             output_device_name=os.environ.get("VB_CABLE_INPUT_NAME", "CABLE Input").strip(),
             verification_device_name=os.environ.get("VB_CABLE_OUTPUT_NAME", "CABLE Output").strip(),
-            record_translated_wav=os.environ.get("RECORD_TRANSLATED_WAV", "1").strip() not in {"0", "false", "False"},
+            record_translated_wav=os.environ.get("RECORD_TRANSLATED_WAV", "0").strip() not in {"0", "false", "False"},
         ),
         translated_record_dir=current_dir / os.environ.get("S2S_RECORD_DIR", "recordings_s2s").strip(),
         speaker_id=(
