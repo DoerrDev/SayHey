@@ -30,16 +30,36 @@ class HuoshanS2TSubtitleEngine:
         self.seen_source = ""
         self.seen_translation = ""
         self.dropped_audio_chunks = 0
+        self._log_id = None
 
     async def start(self, config: TranslatorConfig, on_event: TranslatorEventCallback) -> None:
         self.config = config
         self.on_event = on_event
         self.audio_queue = asyncio.Queue(maxsize=64)
-        self.ws = await websockets.connect(self.ws_url, **self._connect_kwargs())
+        key_fp = f"{self.api_key[:4]}…{self.api_key[-4:]}(len={len(self.api_key)})" if self.api_key else "<empty>"
+        self._emit(
+            "status",
+            message=(
+                f"[game-s2t-auth] key={key_fp} resource_id={self.resource_id} "
+                f"url={self.ws_url} session={self.session_id} connect={self.connection_id}"
+            ),
+        )
+        try:
+            self.ws = await websockets.connect(self.ws_url, **self._connect_kwargs())
+        except Exception as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            headers = getattr(getattr(exc, "response", None), "headers", None)
+            log_id = headers.get("X-Tt-Logid") if headers else None
+            self._emit(
+                "error",
+                message=f"game s2t connect failed: {type(exc).__name__}: {exc} (http_status={status} X-Tt-Logid={log_id})",
+            )
+            raise
         response_headers = getattr(self.ws, "response_headers", None)
         if response_headers is None and hasattr(self.ws, "response"):
             response_headers = self.ws.response.headers
         log_id = response_headers.get("X-Tt-Logid") if response_headers else None
+        self._log_id = log_id
         self._emit("status", message=f"[game-s2t-connect] X-Tt-Logid={log_id}")
         await self.ws.send(self._build_start_request().SerializeToString())
         self.sender_task = asyncio.create_task(self._send_loop())
@@ -123,7 +143,15 @@ class HuoshanS2TSubtitleEngine:
             try:
                 await self.ws.send(self._build_audio_request(chunk).SerializeToString())
             except Exception as exc:
-                self._emit("error", message=f"game s2t websocket send failed: {exc}")
+                code = getattr(exc, "code", None)
+                reason = getattr(exc, "reason", None)
+                self._emit(
+                    "error",
+                    message=(
+                        f"game s2t websocket send failed: {exc} "
+                        f"(close_code={code} reason={reason} logid={self._log_id})"
+                    ),
+                )
                 break
 
     async def _receive_loop(self) -> None:
@@ -138,7 +166,15 @@ class HuoshanS2TSubtitleEngine:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            self._emit("error", message=f"game s2t websocket receive failed: {exc}")
+            code = getattr(exc, "code", None)
+            reason = getattr(exc, "reason", None)
+            self._emit(
+                "error",
+                message=(
+                    f"game s2t websocket receive failed: {exc} "
+                    f"(close_code={code} reason={reason} logid={self._log_id})"
+                ),
+            )
 
     def _handle_response(self, raw: bytes) -> None:
         response = TranslateResponse()
@@ -169,11 +205,14 @@ class HuoshanS2TSubtitleEngine:
         elif response.event == Type.UsageResponse:
             usage = MessageToDict(response, preserving_proto_field_name=True)
             self._emit("status", message=f"[game-s2t-usage] {usage}")
-        elif response.event == Type.AudioMuted:
-            self._emit("status", message=f"[game-s2t-muted] {response.muted_duration_ms} ms")
         elif response.event == Type.SessionFailed:
-            message = response.response_meta.Message or "unknown error"
-            self._emit("error", message=f"game s2t session failed: {message}")
+            meta = response.response_meta
+            message = meta.Message or "unknown error"
+            status_code = getattr(meta, "StatusCode", None)
+            self._emit(
+                "error",
+                message=f"game s2t session failed: code={status_code} msg={message} logid={self._log_id}",
+            )
         elif response.event == Type.SessionFinished:
             self._emit("status", message="[game-s2t-session] finished")
 

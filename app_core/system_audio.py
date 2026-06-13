@@ -45,7 +45,6 @@ class SystemAudioCapture:
         self.speech_cooldown_seconds = speech_cooldown_seconds
         self.stop_event = threading.Event()
         self.thread: Optional[threading.Thread] = None
-        self.last_level_report = 0.0
         self.last_speech_start = 0.0
 
     def start(self) -> None:
@@ -137,6 +136,3 @@ class SystemAudioCapture:
         ):
             self.last_speech_start = now
             self.on_speech_start(now)
-        if self.on_status and now - self.last_level_report > 2.5:
-            self.on_status(f"[game-audio-level] {level:.4f}")
-            self.last_level_report = now

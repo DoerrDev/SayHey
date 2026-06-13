@@ -57,7 +57,6 @@ class AudioInputSource:
         self.speech_cooldown_seconds = speech_cooldown_seconds
         self.noise_gate_threshold = max(0.0, float(noise_gate_threshold))
         self.stream: Optional[sd.InputStream] = None
-        self.last_level_report = 0.0
         self.last_speech_start = 0.0
         self.first_frame_event = threading.Event()
 
@@ -100,9 +99,6 @@ class AudioInputSource:
         ):
             self.last_speech_start = now
             self.on_speech_start(now)
-        if self.on_status and now - self.last_level_report > 2.5:
-            self.on_status(f"[mic-level] {level:.4f}")
-            self.last_level_report = now
         mono = self._resample_if_needed(mono)
         if self.noise_gate_threshold > 0.0 and level < self.noise_gate_threshold:
             mono = np.zeros_like(mono)

@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 from gui.icons import resource_pixmap
 
 _LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "runtime.log"
-_MAX_LINES = 300
+_MAX_LINES = 10000
 _MAX_EVENTS = 6
 
 

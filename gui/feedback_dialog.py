@@ -386,7 +386,7 @@ class FeedbackDialog(QDialog):
         self._thread.sig_done.connect(self._on_submitted)
         self._thread.start()
 
-    def _read_log_tail(self, max_chars: int = 12000) -> str:
+    def _read_log_tail(self, max_chars: int) -> str:
         try:
             text = _LOG_PATH.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -394,13 +394,14 @@ class FeedbackDialog(QDialog):
         return text[-max_chars:]
 
     def _on_send_log(self) -> None:
-        log_text = self._read_log_tail()
+        name = self._name_input.text().strip() or self._store.get().feedback_nickname or "用户"
+        note = self._msg_input.toPlainText().strip()
+        header = "【错误日志】\n" + (f"{note}\n\n" if note else "") + "------ runtime.log ------\n"
+        log_text = self._read_log_tail(3900 - len(header))
         if not log_text.strip():
             QMessageBox.information(self, "提示", "暂时没有可发送的运行日志。")
             return
-        name = self._name_input.text().strip() or self._store.get().feedback_nickname or "用户"
-        note = self._msg_input.toPlainText().strip()
-        message = "【错误日志】\n" + (f"{note}\n\n" if note else "") + "------ runtime.log ------\n" + log_text
+        message = header + log_text
 
         self._log_btn.setEnabled(False)
         self._log_btn.setText("发送中...")

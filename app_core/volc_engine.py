@@ -210,8 +210,6 @@ class VolcAstS2SEngine:
         elif response.event == Type.UsageResponse:
             usage = MessageToDict(response, preserving_proto_field_name=True)
             self._emit("status", message=f"[usage] {usage}")
-        elif response.event == Type.AudioMuted:
-            self._emit("status", message=f"[muted] {response.muted_duration_ms} ms")
         elif response.event == Type.SessionFailed:
             message = response.response_meta.Message or "unknown error"
             self._emit("error", message=f"session failed: {message}")
