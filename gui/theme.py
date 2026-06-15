@@ -307,6 +307,7 @@ QSlider::sub-page:horizontal {
 
 /* === CheckBox === */
 QCheckBox {
+    background: transparent;
     color: #cce4f7;
     spacing: 8px;
     font-size: 13px;

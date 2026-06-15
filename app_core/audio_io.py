@@ -152,6 +152,9 @@ class AudioOutputSink:
         self.output_queue: Queue[tuple[bytes, int] | None] = Queue(maxsize=128)
         self.worker_thread: Optional[threading.Thread] = None
         self.dropped_chunks = 0
+        self.monitor_queue: Queue[bytes | None] = Queue(maxsize=128)
+        self.monitor_thread: Optional[threading.Thread] = None
+        self.monitor_dropped_chunks = 0
 
     def start(self) -> None:
         self.stream = sd.OutputStream(
@@ -171,6 +174,8 @@ class AudioOutputSink:
                     dtype="int16",
                 )
                 self.monitor_stream.start()
+                self.monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
+                self.monitor_thread.start()
                 if self.on_status:
                     self.on_status(
                         f"Monitor active: #{self.monitor_device.index} {self.monitor_device.name}"
@@ -223,6 +228,15 @@ class AudioOutputSink:
             self.stream.stop()
             self.stream.close()
             self.stream = None
+        if self.monitor_thread is not None:
+            while True:
+                try:
+                    self.monitor_queue.get_nowait()
+                except Empty:
+                    break
+            self.monitor_queue.put(None)
+            self.monitor_thread.join(timeout=2.0)
+            self.monitor_thread = None
         if self.monitor_stream is not None:
             try:
                 self.monitor_stream.stop()
@@ -265,6 +279,32 @@ class AudioOutputSink:
             )
         if self.monitor_stream is not None:
             try:
+                self.monitor_queue.put_nowait(pcm_bytes)
+            except Full:
+                self.monitor_dropped_chunks += 1
+                try:
+                    self.monitor_queue.get_nowait()
+                except Empty:
+                    pass
+                try:
+                    self.monitor_queue.put_nowait(pcm_bytes)
+                except Full:
+                    pass
+                if self.on_status and (
+                    self.monitor_dropped_chunks == 1 or self.monitor_dropped_chunks % 20 == 0
+                ):
+                    self.on_status(
+                        f"[monitor-drop] monitor queue full, dropped {self.monitor_dropped_chunks} chunks"
+                    )
+
+    def _monitor_loop(self) -> None:
+        while True:
+            pcm_bytes = self.monitor_queue.get()
+            if pcm_bytes is None:
+                break
+            if self.monitor_stream is None:
+                continue
+            try:
                 self.monitor_stream.write(
                     self._fit_output_channels(
                         pcm_bytes,
@@ -281,6 +321,7 @@ class AudioOutputSink:
                 except Exception:
                     pass
                 self.monitor_stream = None
+                break
 
     def _fit_output_channels(
         self, pcm_bytes: bytes, output_sample_rate: int, output_channels: int, gain: float
