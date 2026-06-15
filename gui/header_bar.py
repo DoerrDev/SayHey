@@ -30,6 +30,8 @@ class HeaderBar(QWidget):
     sig_open_feedback = Signal()
     sig_advanced_toggled = Signal(bool)
 
+    _QQ_GROUP_URL = "https://qun.qq.com/universal-share/share?ac=1&authKey=OQboxi5SlFfTl1ffyOdCgbZLkQoxjwl0qU1QSAwdsYZZ3i1Ny8rt8QFQX9dXznTz&busi_data=eyJncm91cENvZGUiOiIzMDg3NTUwMzAiLCJ0b2tlbiI6ImhyRmx6L2Y1L2NmNFpvaVpLbGRWNjhkVklvZUlBR0xjYUdLTC9ZYnVQWVVBQVBHZ094WU9iU3hHMGhCY0FQSkUiLCJ1aW4iOiIyNTk4MzAxMDA2In0%3D&data=L_MH2GmdxqUbugWN4y2Iw2flQe7PoLbbw2v9K4sRKZ9-O7ODsPnJsHDD52Qnuslqwgw4W3tjWG_0olaJ9Daizw&svctype=4&tempid=h5_group_info"
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._show_token = False
@@ -103,6 +105,13 @@ class HeaderBar(QWidget):
         self._adjust_btn.toggled.connect(self.sig_adjust_overlay.emit)
         layout.addWidget(self._adjust_btn)
 
+        self._qq_btn = QPushButton(_icon("qq"), " 交流群")
+        self._qq_btn.setObjectName("secondary")
+        self._qq_btn.setFixedWidth(90)
+        self._qq_btn.setToolTip("加入QQ交流群")
+        self._qq_btn.clicked.connect(self._on_qq_clicked)
+        layout.addWidget(self._qq_btn)
+
         self._feedback_btn = QPushButton("提需求")
         self._feedback_btn.setObjectName("secondary")
         self._feedback_btn.setFixedWidth(80)
@@ -159,6 +168,11 @@ class HeaderBar(QWidget):
         s = self._version_btn.style()
         s.unpolish(self._version_btn)
         s.polish(self._version_btn)
+
+    def _on_qq_clicked(self) -> None:
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(self._QQ_GROUP_URL))
 
     def _on_version_clicked(self) -> None:
         if self._pending_update and self._pending_update.has_update:
