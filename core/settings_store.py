@@ -67,6 +67,9 @@ class AppSettings:
     qwen_trial_base_url: str = "https://trial.sayhey.top/api/qwen"
     qwen_trial_ws_url: str = "wss://trial.sayhey.top/api/qwen/realtime"
     qwen_s2s_speaker_id: str = ""
+    monitor_enabled: bool = False
+    monitor_device_name: str = ""
+    monitor_gain: float = 1.0
     mic_hotword_set: str = ""
     typed_hotword_set: str = ""
     game_hotword_set: str = ""
@@ -221,6 +224,9 @@ class SettingsStore:
             "GAME_SUBTITLE_SOURCE_LANGUAGE": s.game_subtitle_source_language,
             "GAME_SUBTITLE_TARGET_LANGUAGE": s.game_subtitle_target_language,
             "GAME_AUDIO_DEVICE_NAME": s.game_audio_device_name,
+            "S2S_MONITOR_ENABLED": "1" if s.monitor_enabled else "",
+            "S2S_MONITOR_DEVICE": s.monitor_device_name,
+            "S2S_MONITOR_GAIN": f"{float(s.monitor_gain):.2f}",
         }
         if s.mic_input_index is not None:
             overrides["MIC_INPUT_INDEX"] = str(s.mic_input_index)

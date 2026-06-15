@@ -39,6 +39,9 @@ class AppConfig:
     engine_name: str = "huoshan"
     hotwords: dict = field(default_factory=dict)
     noise_gate_threshold: float = 0.0
+    monitor_enabled: bool = False
+    monitor_device_name: str = ""
+    monitor_gain: float = 1.0
 
 
 class VoiceTranslatorController:
@@ -148,6 +151,12 @@ class VoiceTranslatorController:
     def _start_output_with_fallback(self, devices: list[AudioDevice]) -> AudioOutputSink:
         last_error: Optional[Exception] = None
         source_sample_rate = self._translated_audio_sample_rate()
+        monitor_device = None
+        if self.config.monitor_enabled and self.config.monitor_device_name:
+            try:
+                monitor_device = self.resolver.resolve_output(None, self.config.monitor_device_name)
+            except Exception as exc:
+                self._emit_status(f"Monitor device not found: {self.config.monitor_device_name}: {exc}")
         retry_delays = (0.0, 0.3, 0.6, 1.0)
         for attempt, delay in enumerate(retry_delays):
             if delay > 0:
@@ -166,6 +175,8 @@ class VoiceTranslatorController:
                     on_status=self._emit_status,
                     on_first_write=self._handle_output_first_write,
                     gain=self.config.output_gain,
+                    monitor_device=monitor_device,
+                    monitor_gain=self.config.monitor_gain,
                 )
                 try:
                     sink.start()
@@ -392,4 +403,7 @@ def build_app_config(env_path: Path) -> AppConfig:
         output_gain=float(os.environ.get("S2S_OUTPUT_GAIN", "1.8" if engine_name == "qwen" else "1.0").strip()),
         engine_name=engine_name,
         noise_gate_threshold=float(os.environ.get("MIC_NOISE_GATE", "0").strip() or "0"),
+        monitor_enabled=os.environ.get("S2S_MONITOR_ENABLED", "0").strip() not in {"0", "false", "False", ""},
+        monitor_device_name=os.environ.get("S2S_MONITOR_DEVICE", "").strip(),
+        monitor_gain=float(os.environ.get("S2S_MONITOR_GAIN", "1.0").strip() or "1.0"),
     )

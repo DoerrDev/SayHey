@@ -128,8 +128,13 @@ class AudioOutputSink:
         on_status: Optional[StatusCallback] = None,
         on_first_write: Optional[Callable[[float, int], None]] = None,
         gain: float = 1.0,
+        monitor_device: Optional[AudioDevice] = None,
+        monitor_gain: float = 1.0,
     ) -> None:
         self.device = device
+        self.monitor_device = monitor_device
+        self.monitor_gain = max(0.0, monitor_gain)
+        self.monitor_stream: Optional[sd.OutputStream] = None
         self.source_sample_rate = source_sample_rate
         self.output_sample_rate = output_sample_rate
         self.source_channels = source_channels
@@ -156,6 +161,24 @@ class AudioOutputSink:
             dtype="int16",
         )
         self.stream.start()
+
+        if self.monitor_device is not None:
+            try:
+                self.monitor_stream = sd.OutputStream(
+                    device=self.monitor_device.index,
+                    samplerate=int(self.monitor_device.default_samplerate),
+                    channels=min(max(1, self.output_channels), self.monitor_device.max_output_channels),
+                    dtype="int16",
+                )
+                self.monitor_stream.start()
+                if self.on_status:
+                    self.on_status(
+                        f"Monitor active: #{self.monitor_device.index} {self.monitor_device.name}"
+                    )
+            except Exception as exc:
+                self.monitor_stream = None
+                if self.on_status:
+                    self.on_status(f"[monitor-error] {exc}")
 
         if self.record_wav:
             self.record_dir.mkdir(parents=True, exist_ok=True)
@@ -200,6 +223,13 @@ class AudioOutputSink:
             self.stream.stop()
             self.stream.close()
             self.stream = None
+        if self.monitor_stream is not None:
+            try:
+                self.monitor_stream.stop()
+                self.monitor_stream.close()
+            except Exception:
+                pass
+            self.monitor_stream = None
         if self.wav_file is not None:
             self.wav_file.close()
             self.wav_file = None
@@ -230,20 +260,42 @@ class AudioOutputSink:
         if self.wav_file is not None:
             self.wav_file.writeframes(pcm_bytes)
         if self.stream is not None:
-            self.stream.write(self._fit_output_channels(pcm_bytes))
+            self.stream.write(
+                self._fit_output_channels(pcm_bytes, self.output_sample_rate, self.output_channels, self.gain)
+            )
+        if self.monitor_stream is not None:
+            try:
+                self.monitor_stream.write(
+                    self._fit_output_channels(
+                        pcm_bytes,
+                        int(self.monitor_device.default_samplerate),
+                        self.monitor_stream.channels,
+                        self.gain * self.monitor_gain,
+                    )
+                )
+            except Exception as exc:
+                if self.on_status:
+                    self.on_status(f"[monitor-error] {exc}")
+                try:
+                    self.monitor_stream.close()
+                except Exception:
+                    pass
+                self.monitor_stream = None
 
-    def _fit_output_channels(self, pcm_bytes: bytes) -> np.ndarray:
+    def _fit_output_channels(
+        self, pcm_bytes: bytes, output_sample_rate: int, output_channels: int, gain: float
+    ) -> np.ndarray:
         audio = np.frombuffer(pcm_bytes, dtype=np.int16).reshape(-1, self.source_channels)
-        audio = self._apply_gain(audio)
-        audio = self._resample_if_needed(audio)
-        if self.source_channels == self.output_channels:
+        audio = self._apply_gain(audio, gain)
+        audio = self._resample_if_needed(audio, output_sample_rate)
+        if self.source_channels == output_channels:
             return audio
-        if self.source_channels == 1 and self.output_channels > 1:
-            return np.repeat(audio, self.output_channels, axis=1)
-        if self.source_channels > self.output_channels:
-            return audio[:, : self.output_channels]
+        if self.source_channels == 1 and output_channels > 1:
+            return np.repeat(audio, output_channels, axis=1)
+        if self.source_channels > output_channels:
+            return audio[:, :output_channels]
 
-        padding = np.zeros((audio.shape[0], self.output_channels - self.source_channels), dtype=audio.dtype)
+        padding = np.zeros((audio.shape[0], output_channels - self.source_channels), dtype=audio.dtype)
         return np.concatenate([audio, padding], axis=1)
 
     def _pcm_level(self, pcm_bytes: bytes) -> float:
@@ -252,17 +304,17 @@ class AudioOutputSink:
             return 0.0
         return float(np.sqrt(np.mean(np.square(audio.astype(np.float32)))) / np.iinfo(np.int16).max)
 
-    def _apply_gain(self, audio: np.ndarray) -> np.ndarray:
-        if self.gain == 1.0 or audio.size == 0:
+    def _apply_gain(self, audio: np.ndarray, gain: float) -> np.ndarray:
+        if gain == 1.0 or audio.size == 0:
             return audio
-        amplified = audio.astype(np.float32) * self.gain
+        amplified = audio.astype(np.float32) * gain
         return np.clip(amplified, -32768, 32767).astype(np.int16)
 
-    def _resample_if_needed(self, audio: np.ndarray) -> np.ndarray:
-        if self.source_sample_rate == self.output_sample_rate or audio.size == 0:
+    def _resample_if_needed(self, audio: np.ndarray, output_sample_rate: int) -> np.ndarray:
+        if self.source_sample_rate == output_sample_rate or audio.size == 0:
             return audio
 
-        ratio = self.output_sample_rate / self.source_sample_rate
+        ratio = output_sample_rate / self.source_sample_rate
         output_frames = max(1, int(round(audio.shape[0] * ratio)))
         source_positions = np.arange(audio.shape[0], dtype=np.float32)
         target_positions = np.linspace(0, audio.shape[0] - 1, output_frames, dtype=np.float32)

@@ -40,6 +40,7 @@ from gui.feedback_dialog import FeedbackDialog
 from gui.settings_dialog import SettingsDialog
 from gui.usage_dialog import UsageDialog
 from gui.voice_selector_dialog import VoiceSelectorDialog, voice_is_s2s
+from gui.error_messages import friendly_runtime_error
 from core.usage_tracker import UsageTracker
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -72,6 +73,7 @@ class MainWindow(QMainWindow):
         self._restart_mic_after_stop: bool = False
         self._game_thread: Optional[GameSubtitleThread] = None
         self._last_engine: str = store.get().translator_engine
+        self._last_runtime_error_hint: str = ""
         self._overlay_visible = False
         usage_path = _ENV_PATH.parent / "usage_data.json"
         self._usage_tracker = UsageTracker(
@@ -467,6 +469,8 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_simultaneous_interpretation_enabled(s.mic_simultaneous_interpretation_enabled)
         self._mic_panel.set_speech_rate(s.s2s_speech_rate)
         self._mic_panel.set_noise_gate(s.mic_noise_gate_threshold)
+        self._mic_panel.set_monitor_enabled(s.monitor_enabled)
+        self._mic_panel.set_monitor_device_by_name(s.monitor_device_name)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
         self._game_panel.set_audio_devices(_list_speaker_names(), s.game_audio_device_name)
@@ -545,6 +549,8 @@ class MainWindow(QMainWindow):
             config.speech_rate = speech_rate
             config.noise_gate_threshold = self._mic_panel.selected_noise_gate()
             config.hotwords = self._load_hotwords(self._mic_panel.selected_hotword_set())
+            config.monitor_enabled = self._mic_panel.monitor_enabled()
+            config.monitor_device_name = self._mic_panel.selected_monitor_device_name()
             self._store.save(
                 replace(
                     self._store.get(),
@@ -557,6 +563,8 @@ class MainWindow(QMainWindow):
                     mic_simultaneous_interpretation_enabled=simultaneous_enabled,
                     s2s_speech_rate=speech_rate,
                     mic_noise_gate_threshold=self._mic_panel.selected_noise_gate(),
+                    monitor_enabled=self._mic_panel.monitor_enabled(),
+                    monitor_device_name=self._mic_panel.selected_monitor_device_name(),
                 )
             )
         except Exception as exc:
@@ -598,6 +606,7 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_running(False)
         self._mic_thread = None
         self._header.set_status("错误", "error")
+        msg = friendly_runtime_error(msg)
         if "token_in_use" in msg:
             msg = "这个 token 已经被人占用啦（阿里一 token 一人的限制，建议切换火山引擎）"
         QMessageBox.critical(self, "运行错误", msg)
@@ -705,6 +714,7 @@ class MainWindow(QMainWindow):
     def _on_game_error(self, msg: str) -> None:
         self._game_panel.set_running(False)
         self._game_thread = None
+        msg = friendly_runtime_error(msg)
         QMessageBox.critical(self, "游戏字幕错误", msg)
 
     @Slot(str)
@@ -712,6 +722,13 @@ class MainWindow(QMainWindow):
         kind = "error" if "error" in msg.lower() else "normal"
         self._header.set_status(msg, kind)
         self._log_panel.append(msg)
+        friendly = friendly_runtime_error(msg)
+        if friendly != msg:
+            self._header.set_status(friendly.splitlines()[0], "error")
+            self._log_panel.append(friendly)
+            if friendly != self._last_runtime_error_hint:
+                self._last_runtime_error_hint = friendly
+                QMessageBox.critical(self, "运行错误", friendly)
         if self._store.get().usage_tracking_enabled and ("usage]" in msg):
             self._usage_tracker.feed_log_line(msg)
 

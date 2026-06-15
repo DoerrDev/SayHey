@@ -137,7 +137,7 @@ class HotwordsDialog(QDialog):
             self._table.setItem(row, 1, QTableWidgetItem(v))
 
     def _on_new(self) -> None:
-        title, ok = QInputDialog.getText(self, "新建热词表", "标题：")
+        title, ok = QInputDialog.getText(self, "新建热词表", "标题（提示：热词过多会增加推理成本和延迟，建议拆成多个小热词表）：")
         if not ok:
             return
         title = title.strip()

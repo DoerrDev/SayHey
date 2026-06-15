@@ -217,7 +217,7 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
         )
         audio = np.array([[1000], [20000], [-20000]], dtype=np.int16)
 
-        amplified = sink._apply_gain(audio)
+        amplified = sink._apply_gain(audio, sink.gain)
 
         self.assertEqual(amplified.tolist(), [[2000], [32767], [-32768]])
 

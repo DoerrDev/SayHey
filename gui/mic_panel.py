@@ -61,6 +61,7 @@ class MicTranslatePanel(QFrame):
     sig_zh_to_zh_selected = Signal()
     sig_hotword_changed = Signal(str)
     sig_noise_gate_changed = Signal(float)
+    sig_monitor_changed = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -109,6 +110,21 @@ class MicTranslatePanel(QFrame):
         self._out_combo.currentIndexChanged.connect(self._on_output_changed)
         out_row.addWidget(self._out_combo, 1)
         layout.addWidget(self._out_row_widget)
+
+        # Monitor (耳返) row
+        self._monitor_row_widget = QWidget()
+        monitor_row = QHBoxLayout(self._monitor_row_widget)
+        monitor_row.setContentsMargins(0, 0, 0, 0)
+        monitor_row.setSpacing(12)
+        self._monitor_checkbox = QCheckBox("耳返")
+        self._monitor_checkbox.setToolTip("把翻译后的音频同时播放到你的耳机/扬声器，方便确认是否已翻译输出，不影响进游戏的声音。")
+        self._monitor_checkbox.toggled.connect(self._on_monitor_toggled)
+        monitor_row.addWidget(self._monitor_checkbox)
+        self._monitor_combo = QComboBox()
+        self._monitor_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._monitor_combo.currentIndexChanged.connect(self._on_monitor_changed)
+        monitor_row.addWidget(self._monitor_combo, 1)
+        layout.addWidget(self._monitor_row_widget)
 
         # Engine (hidden — kept for state; configure via settings dialog)
         self._engine_combo = QComboBox()
@@ -248,6 +264,15 @@ class MicTranslatePanel(QFrame):
                 pass
         self._out_combo.blockSignals(False)
 
+        prev_monitor_name = self.selected_monitor_device_name()
+        self._monitor_combo.blockSignals(True)
+        self._monitor_combo.clear()
+        for device in self._resolver.output_devices():
+            self._monitor_combo.addItem(self._device_label(device), device)
+        if prev_monitor_name:
+            self.set_monitor_device_by_name(prev_monitor_name)
+        self._monitor_combo.blockSignals(False)
+
     def _stable_logical_inputs(self) -> list[AudioDevice]:
         by_name: dict[str, list[AudioDevice]] = {}
         for device in self._resolver.input_devices():
@@ -305,11 +330,45 @@ class MicTranslatePanel(QFrame):
     def _on_output_changed(self) -> None:
         self.sig_output_device_changed.emit()
 
+    def monitor_enabled(self) -> bool:
+        return self._monitor_checkbox.isChecked()
+
+    def selected_monitor_device_name(self) -> str:
+        device: AudioDevice | None = self._monitor_combo.currentData()
+        return device.name if device else ""
+
+    def set_monitor_enabled(self, enabled: bool) -> None:
+        self._monitor_checkbox.blockSignals(True)
+        self._monitor_checkbox.setChecked(bool(enabled))
+        self._monitor_checkbox.blockSignals(False)
+        self._monitor_combo.setEnabled(bool(enabled))
+
+    def set_monitor_device_by_name(self, name: str) -> None:
+        if not name:
+            return
+        for i in range(self._monitor_combo.count()):
+            device: AudioDevice | None = self._monitor_combo.itemData(i)
+            if device and device.name == name:
+                self._monitor_combo.blockSignals(True)
+                self._monitor_combo.setCurrentIndex(i)
+                self._monitor_combo.blockSignals(False)
+                return
+
+    @Slot(bool)
+    def _on_monitor_toggled(self, enabled: bool) -> None:
+        self._monitor_combo.setEnabled(enabled)
+        self.sig_monitor_changed.emit()
+
+    @Slot()
+    def _on_monitor_changed(self) -> None:
+        self.sig_monitor_changed.emit()
+
     def selected_speech_rate(self) -> int:
         return self._speech_rate.value()
 
     def set_advanced(self, show: bool) -> None:
         self._out_row_widget.setVisible(show)
+        self._monitor_row_widget.setVisible(show)
 
     def set_speech_rate(self, value: int) -> None:
         self._speech_rate.setValue(int(value))
@@ -408,6 +467,8 @@ class MicTranslatePanel(QFrame):
         self._src_lang_combo.setEnabled(not running)
         self._tgt_lang_combo.setEnabled(not running)
         self._noise_gate_slider.setEnabled(not running)
+        self._monitor_checkbox.setEnabled(not running)
+        self._monitor_combo.setEnabled(not running and self._monitor_checkbox.isChecked())
         self.sig_running_changed.emit(running)
         if not running:
             self._source_buffer.reset()
