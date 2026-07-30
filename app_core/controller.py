@@ -77,7 +77,6 @@ class VoiceTranslatorController:
         self.pending_trace_audio_bytes = 0
         self.latency_grace_seconds = 0.65
         self._translation_held = False
-        self._translation_tail_chunks = 0
         self._translation_state_lock = threading.Lock()
 
     async def run(self) -> None:
@@ -279,14 +278,11 @@ class VoiceTranslatorController:
         if self.config.push_to_translate_enabled:
             with self._translation_state_lock:
                 held = self._translation_held
-                send_tail = not held and self._translation_tail_chunks > 0
-                if send_tail:
-                    self._translation_tail_chunks -= 1
             if not held and self.output_sink is not None:
                 self._write_passthrough(pcm_bytes)
-            if not held and not send_tail:
-                return
-            if send_tail:
+            if not held:
+                # Realtime AST sessions require a continuous packet stream. Keep
+                # the session alive with silence while microphone audio passes through.
                 pcm_bytes = bytes(len(pcm_bytes))
         if self.loop is None or self.engine is None:
             return
@@ -323,7 +319,6 @@ class VoiceTranslatorController:
             if held == self._translation_held:
                 return
             self._translation_held = held
-            self._translation_tail_chunks = 0 if held else max(1, (800 + self.config.chunk_ms - 1) // self.config.chunk_ms)
         self._emit_status("按住翻译：正在翻译" if held else "按住翻译：原声直通")
 
     def _handle_engine_event(self, event: TranslatorEvent) -> None:

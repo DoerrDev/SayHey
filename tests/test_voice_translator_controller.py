@@ -131,9 +131,9 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
         self._run_audio_callback(controller, b"held")
 
         self.assertEqual(controller.output_sink.writes, [(b"raw", 0)])
-        self.assertEqual(controller.engine.sent, [b"held"])
+        self.assertEqual(controller.engine.sent, [bytes(3), b"held"])
 
-    def test_push_to_translate_release_restores_passthrough_and_flushes_silence(self) -> None:
+    def test_push_to_translate_release_restores_passthrough_and_keeps_session_alive(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)
         cfg.push_to_translate_enabled = True
         controller = VoiceTranslatorController(cfg)
@@ -146,6 +146,22 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
 
         self.assertEqual(controller.output_sink.writes, [(b"live", 0)])
         self.assertEqual(controller.engine.sent, [bytes(4)])
+
+    def test_push_to_translate_continuously_sends_silence_while_idle(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.push_to_translate_enabled = True
+        controller = VoiceTranslatorController(cfg)
+        controller.engine = _Engine()
+        controller.output_sink = _Sink()
+
+        for chunk in (b"one", b"two", b"three"):
+            self._run_audio_callback(controller, chunk)
+
+        self.assertEqual(
+            controller.output_sink.writes,
+            [(b"one", 0), (b"two", 0), (b"three", 0)],
+        )
+        self.assertEqual(controller.engine.sent, [bytes(3), bytes(3), bytes(5)])
 
     def test_push_to_translate_resamples_passthrough_for_qwen_output_rate(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)
@@ -160,7 +176,7 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
 
         written = controller.output_sink.writes[0][0]
         self.assertEqual(len(written), 12)
-        self.assertEqual(controller.engine.sent, [])
+        self.assertEqual(controller.engine.sent, [bytes(len(pcm))])
 
     def test_qwen_s2s_engine_uses_selected_voice(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)
