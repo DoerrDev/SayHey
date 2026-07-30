@@ -348,6 +348,7 @@ class QwenLiveTranslateEngine:
             if t:
                 self._source_acc = t
                 self._emit("source_text", text=t)
+            self._emit("source_text_final", text=self._source_acc)
             return
         if et in ("response.audio_transcript.delta", "response.text.delta"):
             d = msg.get("delta") or ""
@@ -399,6 +400,7 @@ class QwenLiveTranslateEngine:
             usage = _qwen_usage_from_message(msg)
             if usage:
                 self._emit("status", message=f"[qwen-realtime-usage] {usage}")
+            self._emit("translated_text_final", text=self._trans_text())
             self._emit("status", message="[qwen] response.done")
             return
         self._emit("status", message=f"[qwen-evt] {et}")

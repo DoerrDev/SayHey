@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+import numpy as np
+
 from app_core.audio_devices import AudioDevice, DeviceResolver, is_virtual_audio_output, is_virtual_loopback_input
 from app_core.audio_io import AudioInputSource, AudioOutputSink, AudioRouteConfig
 from app_core.mock_engine import MockTranslatorEngine
@@ -42,6 +44,7 @@ class AppConfig:
     monitor_enabled: bool = False
     monitor_device_name: str = ""
     monitor_gain: float = 1.0
+    push_to_translate_enabled: bool = False
 
 
 class VoiceTranslatorController:
@@ -73,6 +76,9 @@ class VoiceTranslatorController:
         self.latency_segment_id = 0
         self.pending_trace_audio_bytes = 0
         self.latency_grace_seconds = 0.65
+        self._translation_held = False
+        self._translation_tail_chunks = 0
+        self._translation_state_lock = threading.Lock()
 
     async def run(self) -> None:
         self.loop = asyncio.get_running_loop()
@@ -111,6 +117,8 @@ class VoiceTranslatorController:
                     ),
                     self._handle_engine_event,
                 )
+                if self.config.push_to_translate_enabled:
+                    self._emit_status("按住翻译：原声直通，按住快捷键开始翻译")
             else:
                 self._emit_status("Microphone passthrough active: service translation disabled")
 
@@ -266,8 +274,20 @@ class VoiceTranslatorController:
     def _send_audio_from_callback(self, pcm_bytes: bytes) -> None:
         if not self.config.simultaneous_interpretation_enabled:
             if self.output_sink is not None:
-                self.output_sink.write(pcm_bytes)
+                self._write_passthrough(pcm_bytes)
             return
+        if self.config.push_to_translate_enabled:
+            with self._translation_state_lock:
+                held = self._translation_held
+                send_tail = not held and self._translation_tail_chunks > 0
+                if send_tail:
+                    self._translation_tail_chunks -= 1
+            if not held and self.output_sink is not None:
+                self._write_passthrough(pcm_bytes)
+            if not held and not send_tail:
+                return
+            if send_tail:
+                pcm_bytes = bytes(len(pcm_bytes))
         if self.loop is None or self.engine is None:
             return
         if self.loop.is_closed():
@@ -277,6 +297,34 @@ class VoiceTranslatorController:
             asyncio.run_coroutine_threadsafe(coroutine, self.loop)
         except RuntimeError:
             coroutine.close()
+
+    def _write_passthrough(self, pcm_bytes: bytes) -> None:
+        if self.output_sink is None:
+            return
+        sink_rate = int(getattr(self.output_sink, "source_sample_rate", self.config.sample_rate))
+        if sink_rate != self.config.sample_rate and pcm_bytes:
+            audio = np.frombuffer(pcm_bytes, dtype=np.int16)
+            target_size = max(1, int(round(audio.size * sink_rate / self.config.sample_rate)))
+            source_positions = np.arange(audio.size, dtype=np.float64)
+            target_positions = np.linspace(0, max(audio.size - 1, 0), target_size)
+            audio = np.clip(
+                np.interp(target_positions, source_positions, audio.astype(np.float32)),
+                -32768,
+                32767,
+            ).astype(np.int16)
+            pcm_bytes = audio.tobytes()
+        self.output_sink.write(pcm_bytes)
+
+    def set_translation_held(self, held: bool) -> None:
+        if not self.config.push_to_translate_enabled:
+            return
+        held = bool(held)
+        with self._translation_state_lock:
+            if held == self._translation_held:
+                return
+            self._translation_held = held
+            self._translation_tail_chunks = 0 if held else max(1, (800 + self.config.chunk_ms - 1) // self.config.chunk_ms)
+        self._emit_status("按住翻译：正在翻译" if held else "按住翻译：原声直通")
 
     def _handle_engine_event(self, event: TranslatorEvent) -> None:
         if event.type == "status":
@@ -298,6 +346,8 @@ class VoiceTranslatorController:
             self.on_status(message)
 
     def _handle_speech_start(self, timestamp: float) -> None:
+        if self.config.push_to_translate_enabled and not self._translation_held:
+            return
         self.latency_trace_id += 1
         self.pending_speech_start = timestamp
         self.pending_tts_first = None
@@ -406,4 +456,6 @@ def build_app_config(env_path: Path) -> AppConfig:
         monitor_enabled=os.environ.get("S2S_MONITOR_ENABLED", "0").strip() not in {"0", "false", "False", ""},
         monitor_device_name=os.environ.get("S2S_MONITOR_DEVICE", "").strip(),
         monitor_gain=float(os.environ.get("S2S_MONITOR_GAIN", "1.0").strip() or "1.0"),
+        push_to_translate_enabled=os.environ.get("MIC_PUSH_TO_TRANSLATE", "0").strip()
+        not in {"0", "false", "False"},
     )

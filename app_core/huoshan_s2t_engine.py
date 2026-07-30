@@ -191,15 +191,19 @@ class HuoshanS2TSubtitleEngine:
             self.seen_source = response.text
             self._emit("source_text", text=response.text)
         elif response.event == Type.SourceSubtitleEnd:
+            final_text = response.text or self.seen_source
             if response.text and response.text != self.seen_source:
                 self._emit("source_text", text=response.text)
+            self._emit("source_text_final", text=final_text)
             self.seen_source = ""
         elif response.event == Type.TranslationSubtitleResponse and response.text != self.seen_translation:
             self.seen_translation = response.text
             self._emit("translated_text", text=response.text)
         elif response.event == Type.TranslationSubtitleEnd:
+            final_text = response.text or self.seen_translation
             if response.text and response.text != self.seen_translation:
                 self._emit("translated_text", text=response.text)
+            self._emit("translated_text_final", text=final_text)
             self.seen_translation = ""
             self._emit("status", message="[game-s2t] sentence end")
         elif response.event == Type.UsageResponse:

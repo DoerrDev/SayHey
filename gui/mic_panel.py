@@ -139,6 +139,11 @@ class MicTranslatePanel(QFrame):
         self._simultaneous_checkbox.setToolTip("选中：麦克风发送到服务商，转译音频输出到虚拟声卡；取消：麦克风直接输出到虚拟声卡。")
         self._simultaneous_checkbox.stateChanged.connect(self._on_simultaneous_changed)
         sim_row.addWidget(self._simultaneous_checkbox)
+        self._push_to_translate_checkbox = QCheckBox("按住快捷键时翻译")
+        self._push_to_translate_checkbox.setToolTip(
+            "选中后，按住已设置的快捷键时发送翻译语音；松开时发送麦克风原声。"
+        )
+        sim_row.addWidget(self._push_to_translate_checkbox)
         self._rate_label = QLabel("语速")
         self._rate_label.setObjectName("routeLabel")
         sim_row.addWidget(self._rate_label)
@@ -396,6 +401,12 @@ class MicTranslatePanel(QFrame):
     def set_simultaneous_interpretation_enabled(self, enabled: bool) -> None:
         self._simultaneous_checkbox.setChecked(enabled)
 
+    def push_to_translate_enabled(self) -> bool:
+        return self._push_to_translate_checkbox.isChecked()
+
+    def set_push_to_translate_enabled(self, enabled: bool) -> None:
+        self._push_to_translate_checkbox.setChecked(bool(enabled))
+
     def set_mic_by_index(self, index: int | None) -> None:
         if index is None:
             return
@@ -463,6 +474,7 @@ class MicTranslatePanel(QFrame):
         self._out_combo.setEnabled(not running)
         self._engine_combo.setEnabled(not running)
         self._simultaneous_checkbox.setEnabled(not running)
+        self._push_to_translate_checkbox.setEnabled(not running and self._simultaneous_checkbox.isChecked())
         self._speech_rate.setEnabled(not running)
         self._src_lang_combo.setEnabled(not running)
         self._tgt_lang_combo.setEnabled(not running)
@@ -492,6 +504,8 @@ class MicTranslatePanel(QFrame):
 
     @Slot(int)
     def _on_simultaneous_changed(self, state: int) -> None:
+        if hasattr(self, "_push_to_translate_checkbox"):
+            self._push_to_translate_checkbox.setEnabled(bool(state) and not self._is_running)
         self.sig_simultaneous_changed.emit(bool(state))
 
     @Slot(int)

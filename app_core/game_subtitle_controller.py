@@ -32,6 +32,13 @@ class GameSubtitleConfig:
     chunk_ms: int = 80
     engine_name: str = "huoshan_s2t"
     hotwords: dict = field(default_factory=dict)
+    filter_chinese: bool = False
+
+
+def is_mostly_chinese(text: str) -> bool:
+    han_count = sum("\u4e00" <= char <= "\u9fff" for char in text)
+    latin_count = sum(char.isascii() and char.isalpha() for char in text)
+    return han_count >= 2 and han_count / max(han_count + latin_count, 1) >= 0.35
 
 
 class GameSubtitleController:
@@ -53,6 +60,8 @@ class GameSubtitleController:
         self.latency_trace_id = 0
         self.pending_speech_start: Optional[float] = None
         self.pending_first_text = False
+        self._source_is_chinese: Optional[bool] = None
+        self._pending_translation = ""
 
     async def run(self) -> None:
         self.loop = asyncio.get_running_loop()
@@ -131,12 +140,46 @@ class GameSubtitleController:
             self._emit_status(f"Error: {event.message}")
             self.request_stop()
         elif event.type == "source_text":
+            if self.config.filter_chinese:
+                return
             if self.on_subtitle:
                 self.on_subtitle("source", event.text)
         elif event.type == "translated_text":
+            if self.config.filter_chinese:
+                return
             self._handle_first_text_latency()
             if self.on_subtitle:
                 self.on_subtitle("translation", event.text)
+        elif event.type == "source_text_final":
+            self._handle_filtered_source(event.text)
+        elif event.type == "translated_text_final":
+            self._handle_filtered_translation(event.text)
+
+    def _handle_filtered_source(self, text: str) -> None:
+        if not self.config.filter_chinese:
+            return
+        self._source_is_chinese = is_mostly_chinese(text)
+        if self._source_is_chinese:
+            self._emit_status(f"[game-language-filter] dropped Chinese subtitle: {text[:60]}")
+        elif self.on_subtitle and text:
+            self.on_subtitle("source", text)
+        if self._pending_translation:
+            self._finish_filtered_translation(self._pending_translation)
+
+    def _handle_filtered_translation(self, text: str) -> None:
+        if not self.config.filter_chinese:
+            return
+        if self._source_is_chinese is None:
+            self._pending_translation = text
+            return
+        self._finish_filtered_translation(text)
+
+    def _finish_filtered_translation(self, text: str) -> None:
+        if self._source_is_chinese is False and self.on_subtitle and text:
+            self._handle_first_text_latency()
+            self.on_subtitle("translation", text)
+        self._source_is_chinese = None
+        self._pending_translation = ""
 
     def _handle_capture_error(self, exc: Exception) -> None:
         self.runtime_error = str(exc)
@@ -184,4 +227,6 @@ def build_game_subtitle_config(env_path: Path) -> GameSubtitleConfig:
         audio_device_name=os.environ.get("GAME_AUDIO_DEVICE_NAME", "").strip() or None,
         chunk_ms=int(os.environ.get("GAME_SUBTITLE_CHUNK_MS", "80").strip()),
         engine_name=engine_name,
+        filter_chinese=os.environ.get("GAME_SUBTITLE_FILTER_CHINESE", "0").strip()
+        not in {"0", "false", "False"},
     )

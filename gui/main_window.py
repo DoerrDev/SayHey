@@ -30,7 +30,7 @@ from gui.mic_panel import MicTranslatePanel
 from gui.mic_area import MicAreaPanel
 from gui.float_input import FloatingInputWindow
 from gui.overlay_window import SubtitleOverlay
-from core.hotkey import HotkeyManager, format_hotkey
+from core.hotkey import HoldHotkeyMonitor, HotkeyManager, format_hotkey
 from gui.toast import show_toast
 from app_core.typed_engine import DoubaoTranslateConfig, DoubaoTtsConfig, resolve_doubao_tts_speaker
 from app_core.typed_controller import TypedTranslateController, TypedConfig
@@ -205,6 +205,7 @@ class MainWindow(QMainWindow):
 
         # Global hotkeys
         self._hotkeys = HotkeyManager()
+        self._hold_translate_hotkey = HoldHotkeyMonitor(self)
         from PySide6.QtWidgets import QApplication
         QApplication.instance().installNativeEventFilter(self._hotkeys)
 
@@ -387,6 +388,7 @@ class MainWindow(QMainWindow):
 
     def _apply_hotkeys(self, s: AppSettings) -> None:
         self._hotkeys.unregister_all()
+        self._hold_translate_hotkey.clear()
         bindings = [
             ("typed_panel", s.typed_hotkey, self._hk_toggle_typed_panel),
             ("subtitle", s.hotkey_subtitle_toggle, self._hk_toggle_subtitle),
@@ -402,7 +404,24 @@ class MainWindow(QMainWindow):
                 self._log_panel.append(f"热键已绑定 [{action}]：{combo}")
             else:
                 self._log_panel.append(f"热键绑定失败 [{action}]：{combo}")
+        if s.hotkey_hold_translate:
+            if self._hold_translate_hotkey.configure(
+                s.hotkey_hold_translate,
+                self._on_hold_translate_pressed,
+                self._on_hold_translate_released,
+            ):
+                self._log_panel.append(f"按住翻译热键已绑定：{s.hotkey_hold_translate}")
+            else:
+                self._log_panel.append(f"按住翻译热键绑定失败：{s.hotkey_hold_translate}")
         self._refresh_float_chips()
+
+    def _on_hold_translate_pressed(self) -> None:
+        if self._mic_thread is not None:
+            self._mic_thread.set_translation_held(True)
+
+    def _on_hold_translate_released(self) -> None:
+        if self._mic_thread is not None:
+            self._mic_thread.set_translation_held(False)
 
     def _hk_toggle_typed_panel(self) -> None:
         if self._float_input.isVisible():
@@ -467,12 +486,14 @@ class MainWindow(QMainWindow):
         self._mic_panel.set_target_language(s.s2s_target_language)
         self._mic_panel.set_speaker_id(s.qwen_s2s_speaker_id if is_qwen else s.s2s_speaker_id)
         self._mic_panel.set_simultaneous_interpretation_enabled(s.mic_simultaneous_interpretation_enabled)
+        self._mic_panel.set_push_to_translate_enabled(s.mic_push_to_translate_enabled)
         self._mic_panel.set_speech_rate(s.s2s_speech_rate)
         self._mic_panel.set_noise_gate(s.mic_noise_gate_threshold)
         self._mic_panel.set_monitor_enabled(s.monitor_enabled)
         self._mic_panel.set_monitor_device_by_name(s.monitor_device_name)
         self._game_panel.set_source_language(s.game_subtitle_source_language)
         self._game_panel.set_target_language(s.game_subtitle_target_language)
+        self._game_panel.set_filter_chinese_enabled(s.game_subtitle_filter_chinese)
         self._game_panel.set_audio_devices(_list_speaker_names(), s.game_audio_device_name)
         self._game_audio_accepted = s.game_audio_device_name or ""
         self._apply_mic_conflict_state(self._game_audio_accepted)
@@ -513,10 +534,14 @@ class MainWindow(QMainWindow):
         tgt_lang = self._mic_panel.selected_target_language()
         speaker_id = self._mic_panel.selected_speaker_id()
         simultaneous_enabled = self._mic_panel.simultaneous_interpretation_enabled()
+        push_to_translate_enabled = self._mic_panel.push_to_translate_enabled()
         speech_rate = self._mic_panel.selected_speech_rate()
 
         if simultaneous_enabled and src_lang == tgt_lang and src_lang != "auto" and src_lang != "zh":
             QMessageBox.warning(self, "语言设置", "源语言和目标语言不能相同")
+            return
+        if simultaneous_enabled and push_to_translate_enabled and not self._store.get().hotkey_hold_translate:
+            QMessageBox.warning(self, "按住翻译", "请先在设置 → 快捷键中设置「按住时翻译」快捷键")
             return
 
         if simultaneous_enabled:
@@ -546,6 +571,7 @@ class MainWindow(QMainWindow):
             config.target_language = tgt_lang
             config.speaker_id = speaker_id
             config.simultaneous_interpretation_enabled = simultaneous_enabled
+            config.push_to_translate_enabled = simultaneous_enabled and push_to_translate_enabled
             config.speech_rate = speech_rate
             config.noise_gate_threshold = self._mic_panel.selected_noise_gate()
             config.hotwords = self._load_hotwords(self._mic_panel.selected_hotword_set())
@@ -561,6 +587,7 @@ class MainWindow(QMainWindow):
                     s2s_target_language=tgt_lang,
                     s2s_speaker_id=speaker_id,
                     mic_simultaneous_interpretation_enabled=simultaneous_enabled,
+                    mic_push_to_translate_enabled=push_to_translate_enabled,
                     s2s_speech_rate=speech_rate,
                     mic_noise_gate_threshold=self._mic_panel.selected_noise_gate(),
                     monitor_enabled=self._mic_panel.monitor_enabled(),
@@ -578,6 +605,7 @@ class MainWindow(QMainWindow):
         self._header.set_status("翻译启动中...", "warn")
 
         self._mic_thread = ControllerThread(config, parent=self)
+        self._mic_thread.set_translation_held(self._hold_translate_hotkey.is_pressed)
         self._mic_thread.sig_status.connect(self.sig_status)
         self._mic_thread.sig_source.connect(self.sig_mic_source)
         self._mic_thread.sig_translation.connect(self.sig_mic_translation)
@@ -671,11 +699,13 @@ class MainWindow(QMainWindow):
             config.source_language = src
             config.target_language = tgt
             config.audio_device_name = audio_device or None
+            config.filter_chinese = self._game_panel.filter_chinese_enabled()
             config.hotwords = self._load_hotwords(self._game_panel.selected_hotword_set())
             self._store.save(replace(
                 self._store.get(),
                 game_subtitle_source_language=src,
                 game_subtitle_target_language=tgt,
+                game_subtitle_filter_chinese=config.filter_chinese,
                 game_audio_device_name=audio_device,
             ))
         except Exception as exc:

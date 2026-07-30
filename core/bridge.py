@@ -25,6 +25,7 @@ class ControllerThread(QThread):
         super().__init__(parent)
         self._config = config
         self._controller: Optional[VoiceTranslatorController] = None
+        self._translation_held = False
 
     def run(self) -> None:
         try:
@@ -34,6 +35,7 @@ class ControllerThread(QThread):
                 on_source=self.sig_source.emit,
                 on_translation=self.sig_translation.emit,
             )
+            self._controller.set_translation_held(self._translation_held)
             asyncio.run(self._controller.run())
         except asyncio.CancelledError:
             self.sig_status.emit("Stopped")
@@ -48,6 +50,11 @@ class ControllerThread(QThread):
     def request_stop(self) -> None:
         if self._controller is not None:
             self._controller.request_stop()
+
+    def set_translation_held(self, held: bool) -> None:
+        self._translation_held = bool(held)
+        if self._controller is not None:
+            self._controller.set_translation_held(held)
 
 
 class GameSubtitleThread(QThread):

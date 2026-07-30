@@ -21,6 +21,22 @@ class AdvancedPanelSettingTests(unittest.TestCase):
             store2 = SettingsStore(path)
             self.assertTrue(store2.get().show_advanced_panel)
 
+    def test_push_to_translate_settings_round_trip(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "settings.json"
+            store = SettingsStore(path)
+            from dataclasses import replace
+            store.save(replace(
+                store.get(),
+                mic_push_to_translate_enabled=True,
+                hotkey_hold_translate="mouse4",
+            ))
+
+            loaded = SettingsStore(path).get()
+
+            self.assertTrue(loaded.mic_push_to_translate_enabled)
+            self.assertEqual(loaded.hotkey_hold_translate, "mouse4")
+
 
 if __name__ == "__main__":
     unittest.main()

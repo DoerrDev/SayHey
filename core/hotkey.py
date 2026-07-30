@@ -4,7 +4,7 @@ import ctypes
 import ctypes.wintypes as wt
 from typing import Callable, Optional
 
-from PySide6.QtCore import QAbstractNativeEventFilter, QByteArray
+from PySide6.QtCore import QAbstractNativeEventFilter, QByteArray, QObject, QTimer
 
 _MOD_ALT = 0x0001
 _MOD_CONTROL = 0x0002
@@ -17,6 +17,9 @@ _VK_MAP = {
     "f7": 0x76, "f8": 0x77, "f9": 0x78, "f10": 0x79, "f11": 0x7A, "f12": 0x7B,
     "space": 0x20, "enter": 0x0D, "tab": 0x09, "esc": 0x1B,
 }
+
+_VK_XBUTTON1 = 0x05
+_VK_XBUTTON2 = 0x06
 
 # Mouse side buttons: bound through a low-level mouse hook instead of RegisterHotKey.
 MOUSE_KEYS = {"mouse4", "mouse5"}
@@ -85,6 +88,81 @@ def format_hotkey(raw: str) -> str:
             return "Mouse5"
         return p[:1].upper() + p[1:] if len(p) > 1 else p.upper()
     return " + ".join(_cap(p) for p in parts)
+
+
+def parse_hold_hotkey(text: str) -> tuple[int, int] | None:
+    mouse = parse_mouse_hotkey(text)
+    if mouse is not None:
+        mods, key = mouse
+        return mods, _VK_XBUTTON1 if key == "mouse4" else _VK_XBUTTON2
+    return parse_hotkey(text)
+
+
+class HoldHotkeyMonitor(QObject):
+    """Poll a global key state so both press and release transitions are observable."""
+
+    def __init__(self, parent: Optional[QObject] = None) -> None:
+        super().__init__(parent)
+        self._user32 = ctypes.windll.user32
+        self._binding: tuple[int, int] | None = None
+        self._pressed = False
+        self._on_pressed: Optional[Callable[[], None]] = None
+        self._on_released: Optional[Callable[[], None]] = None
+        self._timer = QTimer(self)
+        self._timer.setInterval(20)
+        self._timer.timeout.connect(self._poll)
+
+    @property
+    def is_pressed(self) -> bool:
+        return self._pressed
+
+    def configure(
+        self,
+        combo: str,
+        on_pressed: Callable[[], None],
+        on_released: Callable[[], None],
+    ) -> bool:
+        self.clear()
+        binding = parse_hold_hotkey(combo)
+        if binding is None:
+            return False
+        self._binding = binding
+        self._on_pressed = on_pressed
+        self._on_released = on_released
+        self._timer.start()
+        return True
+
+    def clear(self) -> None:
+        self._timer.stop()
+        if self._pressed and self._on_released is not None:
+            self._on_released()
+        self._pressed = False
+        self._binding = None
+        self._on_pressed = None
+        self._on_released = None
+
+    def _key_down(self, vk: int) -> bool:
+        return bool(self._user32.GetAsyncKeyState(vk) & 0x8000)
+
+    def _poll(self) -> None:
+        if self._binding is None:
+            return
+        mods, vk = self._binding
+        down = self._key_down(vk)
+        if mods & _MOD_CONTROL:
+            down = down and (self._key_down(_VK_LCONTROL) or self._key_down(_VK_RCONTROL))
+        if mods & _MOD_ALT:
+            down = down and (self._key_down(_VK_LMENU) or self._key_down(_VK_RMENU))
+        if mods & _MOD_SHIFT:
+            down = down and (self._key_down(_VK_LSHIFT) or self._key_down(_VK_RSHIFT))
+        if mods & _MOD_WIN:
+            down = down and (self._key_down(_VK_LWIN) or self._key_down(_VK_RWIN))
+        if down == self._pressed:
+            return
+        self._pressed = down
+        callback = self._on_pressed if down else self._on_released
+        if callback is not None:
+            callback()
 
 
 # --- Low-level mouse hook (for binding mouse side buttons globally) ---

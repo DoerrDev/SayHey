@@ -643,6 +643,9 @@ class SettingsDialog(QDialog):
         self._hk_sim_checkbox = _HotkeyCaptureEdit()
         form.addRow("切换 麦克风直连/同声传译", self._hk_sim_checkbox)
 
+        self._hk_hold_translate = _HotkeyCaptureEdit()
+        form.addRow("按住时翻译", self._hk_hold_translate)
+
         self._hk_subtitle_drag = _HotkeyCaptureEdit()
         form.addRow("开启/关闭 调整字幕位置", self._hk_subtitle_drag)
 
@@ -832,6 +835,7 @@ class SettingsDialog(QDialog):
         self._hk_subtitle.set_combo(s.hotkey_subtitle_toggle)
         self._hk_si.set_combo(s.hotkey_si_toggle)
         self._hk_sim_checkbox.set_combo(s.hotkey_sim_checkbox)
+        self._hk_hold_translate.set_combo(s.hotkey_hold_translate)
         self._hk_subtitle_drag.set_combo(s.hotkey_subtitle_drag_toggle)
         self._hk_typed_tts.set_combo(s.hotkey_typed_tts_toggle)
         self._hk_typed_panel.set_combo(s.typed_hotkey)
@@ -881,6 +885,7 @@ class SettingsDialog(QDialog):
             hotkey_subtitle_toggle=self._hk_subtitle.combo(),
             hotkey_si_toggle=self._hk_si.combo(),
             hotkey_sim_checkbox=self._hk_sim_checkbox.combo(),
+            hotkey_hold_translate=self._hk_hold_translate.combo(),
             hotkey_subtitle_drag_toggle=self._hk_subtitle_drag.combo(),
             hotkey_typed_tts_toggle=self._hk_typed_tts.combo(),
             typed_hotkey=self._hk_typed_panel.combo(),

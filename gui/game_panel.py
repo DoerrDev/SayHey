@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -123,6 +124,12 @@ class GameSubtitlePanel(QFrame):
         self._hotword_selector = HotwordSelector()
         self._hotword_selector.sig_changed.connect(self.sig_hotword_changed)
         layout.addWidget(self._hotword_selector)
+
+        self._filter_chinese_checkbox = QCheckBox("不显示中文语音字幕")
+        self._filter_chinese_checkbox.setToolTip(
+            "仅过滤识别为中文的字幕显示，音频仍会发送至语音识别服务并产生相应用量。"
+        )
+        layout.addWidget(self._filter_chinese_checkbox)
 
         # Audio source row (hidden in simplified mode)
         self._audio_row_widget = QWidget()
@@ -261,6 +268,12 @@ class GameSubtitlePanel(QFrame):
     def set_hotword_set(self, title: str) -> None:
         self._hotword_selector.set_current(title)
 
+    def filter_chinese_enabled(self) -> bool:
+        return self._filter_chinese_checkbox.isChecked()
+
+    def set_filter_chinese_enabled(self, enabled: bool) -> None:
+        self._filter_chinese_checkbox.setChecked(bool(enabled))
+
     @Slot()
     def _on_toggle(self) -> None:
         if self._is_running:
@@ -277,6 +290,7 @@ class GameSubtitlePanel(QFrame):
         self._src_combo.setEnabled(not running)
         self._tgt_combo.setEnabled(not running)
         self._audio_combo.setEnabled(not running)
+        self._filter_chinese_checkbox.setEnabled(not running)
         if not running:
             self._source_buffer.reset()
             self._translation_buffer.reset()

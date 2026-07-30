@@ -33,6 +33,12 @@ class _Sink:
         self.writes.append((pcm_bytes, segment_id))
 
 
+class _RateSink(_Sink):
+    def __init__(self, source_sample_rate: int) -> None:
+        super().__init__()
+        self.source_sample_rate = source_sample_rate
+
+
 class _Engine:
     def __init__(self) -> None:
         self.sent: list[bytes] = []
@@ -50,6 +56,28 @@ class _Ws:
 
 
 class VoiceTranslatorControllerTests(unittest.TestCase):
+    def _run_audio_callback(self, controller: VoiceTranslatorController, pcm_bytes: bytes) -> None:
+        class _Loop:
+            def is_closed(self) -> bool:
+                return False
+
+        controller.loop = _Loop()
+
+        def run_now(coroutine, loop):
+            try:
+                coroutine.send(None)
+            except StopIteration:
+                pass
+
+        import app_core.controller as controller_module
+
+        original = controller_module.asyncio.run_coroutine_threadsafe
+        controller_module.asyncio.run_coroutine_threadsafe = run_now
+        try:
+            controller._send_audio_from_callback(pcm_bytes)
+        finally:
+            controller_module.asyncio.run_coroutine_threadsafe = original
+
     def test_passthrough_mode_writes_microphone_audio_directly_to_output_sink(self) -> None:
         controller = VoiceTranslatorController(_config(simultaneous_interpretation_enabled=False))
         sink = _Sink()
@@ -90,6 +118,49 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
 
         self.assertEqual(engine.sent, [b"mic-pcm"])
         self.assertEqual(len(futures), 1)
+
+    def test_push_to_translate_routes_held_audio_to_engine(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.push_to_translate_enabled = True
+        controller = VoiceTranslatorController(cfg)
+        controller.engine = _Engine()
+        controller.output_sink = _Sink()
+
+        self._run_audio_callback(controller, b"raw")
+        controller.set_translation_held(True)
+        self._run_audio_callback(controller, b"held")
+
+        self.assertEqual(controller.output_sink.writes, [(b"raw", 0)])
+        self.assertEqual(controller.engine.sent, [b"held"])
+
+    def test_push_to_translate_release_restores_passthrough_and_flushes_silence(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.push_to_translate_enabled = True
+        controller = VoiceTranslatorController(cfg)
+        controller.engine = _Engine()
+        controller.output_sink = _Sink()
+        controller.set_translation_held(True)
+        controller.set_translation_held(False)
+
+        self._run_audio_callback(controller, b"live")
+
+        self.assertEqual(controller.output_sink.writes, [(b"live", 0)])
+        self.assertEqual(controller.engine.sent, [bytes(4)])
+
+    def test_push_to_translate_resamples_passthrough_for_qwen_output_rate(self) -> None:
+        cfg = _config(simultaneous_interpretation_enabled=True)
+        cfg.push_to_translate_enabled = True
+        cfg.sample_rate = 16000
+        controller = VoiceTranslatorController(cfg)
+        controller.engine = _Engine()
+        controller.output_sink = _RateSink(source_sample_rate=24000)
+        pcm = np.array([0, 1000, 2000, 3000], dtype=np.int16).tobytes()
+
+        self._run_audio_callback(controller, pcm)
+
+        written = controller.output_sink.writes[0][0]
+        self.assertEqual(len(written), 12)
+        self.assertEqual(controller.engine.sent, [])
 
     def test_qwen_s2s_engine_uses_selected_voice(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)
@@ -195,6 +266,21 @@ class VoiceTranslatorControllerTests(unittest.TestCase):
             "[qwen-realtime-usage] {'total_tokens': 12, 'input_tokens_details': {'audio_tokens': 7}, 'output_tokens_details': {'text_tokens': 5}}",
             messages,
         )
+
+    def test_qwen_emits_final_source_and_translation_text(self) -> None:
+        engine = QwenLiveTranslateEngine(api_key="key")
+        events = []
+        engine.on_event = events.append
+
+        engine._handle_event({
+            "type": "conversation.item.input_audio_transcription.completed",
+            "transcript": "Enemy on the left",
+        })
+        engine._trans_active_part = "敌人在左边"
+        engine._handle_event({"type": "response.done", "response": {}})
+
+        self.assertIn(("source_text_final", "Enemy on the left"), [(e.type, e.text) for e in events])
+        self.assertIn(("translated_text_final", "敌人在左边"), [(e.type, e.text) for e in events])
 
     def test_huoshan_translated_audio_uses_config_sample_rate(self) -> None:
         cfg = _config(simultaneous_interpretation_enabled=True)

@@ -28,9 +28,11 @@ class AppSettings:
     s2s_speaker_id: str = "zh_female_xiaohe_jupiter_bigtts"
     s2s_speech_rate: int = 0
     mic_simultaneous_interpretation_enabled: bool = True
+    mic_push_to_translate_enabled: bool = False
     mic_noise_gate_threshold: float = 0.02
     game_subtitle_source_language: str = "en"
     game_subtitle_target_language: str = "zh"
+    game_subtitle_filter_chinese: bool = False
     mic_input_index: Optional[int] = None
     mic_output_index: Optional[int] = None
     game_audio_device_name: str = ""
@@ -61,6 +63,7 @@ class AppSettings:
     hotkey_sim_checkbox: str = ""
     hotkey_subtitle_drag_toggle: str = ""
     hotkey_typed_tts_toggle: str = ""
+    hotkey_hold_translate: str = ""
     show_advanced_panel: bool = False
     advanced_audio_warning_shown: bool = False
     zh_to_zh_info_shown: bool = False
@@ -188,8 +191,12 @@ class SettingsStore:
             s2s_speech_rate=int(get("S2S_SPEECH_RATE", "0") or "0"),
             mic_simultaneous_interpretation_enabled=get("MIC_SIMULTANEOUS_INTERPRETATION", "1")
             not in {"0", "false", "False"},
+            mic_push_to_translate_enabled=get("MIC_PUSH_TO_TRANSLATE", "0")
+            not in {"0", "false", "False"},
             game_subtitle_source_language=get("GAME_SUBTITLE_SOURCE_LANGUAGE", "en"),
             game_subtitle_target_language=get("GAME_SUBTITLE_TARGET_LANGUAGE", "zh"),
+            game_subtitle_filter_chinese=get("GAME_SUBTITLE_FILTER_CHINESE", "0")
+            not in {"0", "false", "False"},
             mic_input_index=mic_idx,
             game_audio_device_name=get("GAME_AUDIO_DEVICE_NAME"),
             qwen_api_key=get("QWEN_API_KEY"),
@@ -224,9 +231,11 @@ class SettingsStore:
             "S2S_SPEAKER_ID": s.s2s_speaker_id,
             "S2S_SPEECH_RATE": str(s.s2s_speech_rate),
             "MIC_SIMULTANEOUS_INTERPRETATION": "1" if s.mic_simultaneous_interpretation_enabled else "0",
+            "MIC_PUSH_TO_TRANSLATE": "1" if s.mic_push_to_translate_enabled else "",
             "MIC_NOISE_GATE": f"{float(s.mic_noise_gate_threshold):.4f}",
             "GAME_SUBTITLE_SOURCE_LANGUAGE": s.game_subtitle_source_language,
             "GAME_SUBTITLE_TARGET_LANGUAGE": s.game_subtitle_target_language,
+            "GAME_SUBTITLE_FILTER_CHINESE": "1" if s.game_subtitle_filter_chinese else "",
             "GAME_AUDIO_DEVICE_NAME": s.game_audio_device_name,
             "S2S_MONITOR_ENABLED": "1" if s.monitor_enabled else "",
             "S2S_MONITOR_DEVICE": s.monitor_device_name,
