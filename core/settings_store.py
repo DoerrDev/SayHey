@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
-_APP_DIR = Path(__file__).resolve().parent.parent
+if getattr(sys, "frozen", False):
+    _APP_DIR = Path(sys.executable).resolve().parent
+else:
+    _APP_DIR = Path(__file__).resolve().parent.parent
 SETTINGS_PATH = _APP_DIR / "settings.json"
 _ENV_PATH = _APP_DIR / ".env"
 
