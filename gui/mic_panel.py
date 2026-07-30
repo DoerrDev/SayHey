@@ -113,6 +113,7 @@ class MicTranslatePanel(QFrame):
 
         # Monitor (耳返) row
         self._monitor_row_widget = QWidget()
+        self._monitor_row_widget.setStyleSheet("background: transparent;")
         monitor_row = QHBoxLayout(self._monitor_row_widget)
         monitor_row.setContentsMargins(0, 0, 0, 0)
         monitor_row.setSpacing(12)
@@ -373,7 +374,7 @@ class MicTranslatePanel(QFrame):
 
     def set_advanced(self, show: bool) -> None:
         self._out_row_widget.setVisible(show)
-        self._monitor_row_widget.setVisible(show)
+        # 耳返行始终可见（默认模式下也可使用），不随高级音频模式切换。
 
     def set_speech_rate(self, value: int) -> None:
         self._speech_rate.setValue(int(value))
