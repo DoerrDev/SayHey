@@ -85,6 +85,12 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1060, 720)
         self.resize(1700, 900)
 
+        from gui.history_recorder import HistoryRecorder
+        history_on = store.get().history_enabled
+        self._mic_history = HistoryRecorder("mic", history_on)
+        self._game_history = HistoryRecorder("game", history_on)
+        self._typed_history = HistoryRecorder("typed", history_on)
+
         self._build_layout()
         self._connect_signals()
         self._apply_settings(store.get())
@@ -252,6 +258,9 @@ class MainWindow(QMainWindow):
         self.sig_status.connect(self._on_status)
         self.sig_mic_source.connect(self._mic_panel.update_source)
         self.sig_mic_translation.connect(self._mic_panel.update_translation)
+        self.sig_mic_source.connect(self._mic_history.update_source)
+        self.sig_mic_translation.connect(self._mic_history.update_translation)
+        self.sig_game_subtitle.connect(self._on_game_subtitle_history)
         self._game_panel.sig_subtitle_flushed.connect(self._overlay.update_text)
         self.sig_game_subtitle.connect(self._game_panel.append_subtitle_token)
         self.sig_mic_stopped.connect(self._on_mic_stopped)
@@ -372,6 +381,14 @@ class MainWindow(QMainWindow):
     def _on_typed_result(self, source: str, translated: str) -> None:
         self._typed_panel.show_result(source, translated)
         self._float_input.show_result(source, translated)
+        self._typed_history.record(source, translated)
+
+    @Slot(str, str)
+    def _on_game_subtitle_history(self, kind: str, text: str) -> None:
+        if kind == "source":
+            self._game_history.update_source(text)
+        else:
+            self._game_history.update_translation(text)
 
     @Slot()
     def _on_typed_done(self) -> None:
@@ -472,6 +489,8 @@ class MainWindow(QMainWindow):
 
     def _apply_settings(self, s: AppSettings) -> None:
         is_qwen = s.translator_engine == "qwen"
+        for rec in (self._mic_history, self._game_history, self._typed_history):
+            rec.set_enabled(s.history_enabled)
         self._header.set_usage_visible(s.usage_tracking_enabled)
         self._header.set_usage_mode(s.usage_chip_show_token)
         if s.usage_tracking_enabled:
@@ -621,6 +640,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_mic_stopped(self) -> None:
+        self._mic_history.commit()
         self._mic_panel.set_running(False)
         self._mic_thread = None
         self._header.set_status("就绪")
@@ -733,6 +753,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_game_stopped(self) -> None:
+        self._game_history.commit()
         self._game_panel.set_running(False)
         self._game_thread = None
         self._log_panel.append("游戏字幕已停止")

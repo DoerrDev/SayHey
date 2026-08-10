@@ -5,6 +5,7 @@ settings.json
 
 # Runtime output
 usage_data.json
+history/
 logs/
 recordings/
 recordings_s2s/

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal, Slot
+from datetime import date
+from pathlib import Path
+
+from PySide6.QtCore import QDate, QSize, Signal, Slot
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QMessageBox,
@@ -24,6 +27,7 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtCore import Qt
 
+from core import history_store
 from core.settings_store import AppSettings, SettingsStore
 from core.hotkey import format_hotkey
 from gui.icons import icon as _icon
@@ -253,6 +257,70 @@ def _section_title(text: str) -> QLabel:
     return lbl
 
 
+class _SideTabs(QWidget):
+    """左侧导航 + 右侧内容，接口与 QTabWidget 常用方法兼容。"""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        from PySide6.QtWidgets import QListWidget, QStackedWidget
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(12)
+
+        self._nav = QListWidget()
+        self._nav.setObjectName("settingsNav")
+        self._nav.setFixedWidth(180)
+        self._nav.setIconSize(QSize(18, 18))
+        self._nav.setSpacing(2)
+        lay.addWidget(self._nav)
+
+        self._stack = QStackedWidget()
+        self._stack.setObjectName("settingsPane")
+        lay.addWidget(self._stack, 1)
+
+        self._nav.currentRowChanged.connect(self._on_row_changed)
+
+    def addTab(self, widget: QWidget, icon, text: str) -> int:
+        from PySide6.QtWidgets import QListWidgetItem
+
+        item = QListWidgetItem(icon, text.strip())
+        item.setSizeHint(QSize(0, 38))
+        self._nav.addItem(item)
+        self._stack.addWidget(widget)
+        if self._nav.currentRow() < 0:
+            self._nav.setCurrentRow(0)
+        return self._stack.count() - 1
+
+    def indexOf(self, widget: QWidget) -> int:
+        return self._stack.indexOf(widget)
+
+    def setTabVisible(self, index: int, visible: bool) -> None:
+        item = self._nav.item(index)
+        if item is not None:
+            item.setHidden(not visible)
+            if not visible and self._nav.currentRow() == index:
+                for row in range(self._nav.count()):
+                    if not self._nav.item(row).isHidden():
+                        self._nav.setCurrentRow(row)
+                        break
+
+    def setTabText(self, index: int, text: str) -> None:
+        item = self._nav.item(index)
+        if item is not None:
+            item.setText(text.strip())
+
+    def setCurrentIndex(self, index: int) -> None:
+        self._nav.setCurrentRow(index)
+
+    def currentIndex(self) -> int:
+        return self._nav.currentRow()
+
+    def _on_row_changed(self, row: int) -> None:
+        if row >= 0:
+            self._stack.setCurrentIndex(row)
+
+
 class SettingsDialog(QDialog):
     settings_saved = Signal(object)  # AppSettings — use object for PySide6 compat
 
@@ -275,7 +343,7 @@ class SettingsDialog(QDialog):
         header_lbl.setStyleSheet("font-size: 18px; font-weight: 900; color: #eef7ff;")
         root.addWidget(header_lbl)
 
-        self._tabs = QTabWidget()
+        self._tabs = _SideTabs()
         root.addWidget(self._tabs, 1)
 
         self._engine_value = "huoshan"
@@ -290,6 +358,7 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(self._build_overlay_tab(), _icon("captions"), " 字幕外观")
         self._tabs.addTab(self._build_hotkeys_tab(), _icon("settings"), " 快捷键")
         self._tabs.addTab(self._build_usage_tab(), _icon("bar-chart-3"), " 用量统计")
+        self._tabs.addTab(self._build_history_tab(), _icon("clock"), " 翻译历史")
 
         btn_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
@@ -685,6 +754,94 @@ class SettingsDialog(QDialog):
 
         return w
 
+    def _build_history_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QDateEdit
+
+        w = self._tab_widget()
+        form = QFormLayout(w)
+        form.setContentsMargins(20, 20, 20, 20)
+        form.setSpacing(14)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self._history_enabled = QCheckBox("记录翻译历史（原文 / 译文 / 时间）")
+        self._history_enabled.setToolTip(f"历史按天保存在本地 {history_store.HISTORY_DIR}")
+        form.addRow("", self._history_enabled)
+
+        today = QDate.currentDate()
+        self._history_start = QDateEdit(today.addDays(-7))
+        self._history_start.setCalendarPopup(True)
+        self._history_start.setDisplayFormat("yyyy-MM-dd")
+        form.addRow("开始日期", self._history_start)
+
+        self._history_end = QDateEdit(today)
+        self._history_end.setCalendarPopup(True)
+        self._history_end.setDisplayFormat("yyyy-MM-dd")
+        form.addRow("结束日期", self._history_end)
+
+        btn_row = QHBoxLayout()
+        count_btn = QPushButton("统计条数")
+        count_btn.clicked.connect(self._count_history)
+        btn_row.addWidget(count_btn)
+        export_btn = QPushButton("导出为 txt")
+        export_btn.clicked.connect(self._export_history)
+        btn_row.addWidget(export_btn)
+        clear_btn = QPushButton("删除该时间段历史")
+        clear_btn.clicked.connect(self._clear_history)
+        btn_row.addWidget(clear_btn)
+        btn_row.addStretch(1)
+        form.addRow("", btn_row)
+
+        self._history_hint = QLabel("")
+        self._history_hint.setObjectName("routeLabel")
+        self._history_hint.setWordWrap(True)
+        form.addRow("", self._history_hint)
+
+        return w
+
+    def _history_range(self) -> tuple[date, date]:
+        return (
+            self._history_start.date().toPython(),
+            self._history_end.date().toPython(),
+        )
+
+    def _count_history(self) -> None:
+        start, end = self._history_range()
+        records = history_store.load_range(start, end)
+        self._history_hint.setText(f"{start} ~ {end} 共 {len(records)} 条记录")
+
+    def _export_history(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
+
+        start, end = self._history_range()
+        records = history_store.load_range(start, end)
+        if not records:
+            QMessageBox.information(self, "导出翻译历史", f"{start} ~ {end} 没有历史记录")
+            return
+        default_name = f"sayhey-history-{start}_{end}.txt"
+        path, _ = QFileDialog.getSaveFileName(self, "导出翻译历史", default_name, "文本文件 (*.txt)")
+        if not path:
+            return
+        try:
+            Path(path).write_text(history_store.format_text(records), encoding="utf-8")
+        except Exception as exc:
+            QMessageBox.critical(self, "导出失败", str(exc))
+            return
+        self._history_hint.setText(f"已导出 {len(records)} 条到 {path}")
+
+    def _clear_history(self) -> None:
+        start, end = self._history_range()
+        reply = QMessageBox.question(
+            self,
+            "删除翻译历史",
+            f"确认删除 {start} ~ {end} 的历史记录？该操作不可恢复。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        removed = history_store.clear_range(start, end)
+        self._history_hint.setText(f"已删除 {removed} 个历史文件")
+
     def _apply_trial_token(self) -> None:
         import time, json, urllib.request, urllib.error
         from core.machine_id import get_machine_id_hash
@@ -815,6 +972,7 @@ class SettingsDialog(QDialog):
         self._show_source.setChecked(s.overlay_show_source)
         self._usage_tracking.setChecked(s.usage_tracking_enabled)
         self._usage_chip_show_token.setChecked(s.usage_chip_show_token)
+        self._history_enabled.setChecked(s.history_enabled)
 
         self._volc_trial_enabled.setChecked(s.volc_trial_enabled)
         self._volc_trial_token.setText(s.volc_trial_token)
@@ -878,6 +1036,7 @@ class SettingsDialog(QDialog):
             overlay_show_source=self._show_source.isChecked(),
             usage_tracking_enabled=self._usage_tracking.isChecked(),
             usage_chip_show_token=self._usage_chip_show_token.isChecked(),
+            history_enabled=self._history_enabled.isChecked(),
             volc_trial_enabled=self._volc_trial_enabled.isChecked(),
             volc_trial_token=self._volc_trial_token.text().strip(),
             volc_trial_proxy_ws_url=volc_trial_proxy_ws_url,

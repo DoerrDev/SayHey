@@ -77,6 +77,7 @@ class AppSettings:
     monitor_enabled: bool = False
     monitor_device_name: str = ""
     monitor_gain: float = 1.0
+    history_enabled: bool = True
     mic_hotword_set: str = ""
     typed_hotword_set: str = ""
     game_hotword_set: str = ""

@@ -246,6 +246,34 @@ QTabWidget::pane {
     top: -1px;
 }
 
+/* === Settings sidebar === */
+QListWidget#settingsNav {
+    background: rgba(10, 18, 26, 0.92);
+    border: 1px solid rgba(163, 207, 255, 0.12);
+    border-radius: 16px;
+    padding: 8px 6px;
+    outline: none;
+}
+QListWidget#settingsNav::item {
+    border-radius: 10px;
+    padding: 6px 10px;
+    color: #9ab8d0;
+    font-weight: 700;
+    font-size: 13px;
+}
+QListWidget#settingsNav::item:selected {
+    background: rgba(66, 221, 146, 0.12);
+    color: #c6ffdf;
+}
+QListWidget#settingsNav::item:hover:!selected {
+    background: rgba(255, 255, 255, 0.06);
+}
+QStackedWidget#settingsPane {
+    border: 1px solid rgba(163, 207, 255, 0.12);
+    border-radius: 16px;
+    background: rgba(10, 18, 26, 0.92);
+}
+
 /* === Spinbox, Slider === */
 QSpinBox, QDoubleSpinBox {
     background: rgba(5, 10, 15, 0.80);
