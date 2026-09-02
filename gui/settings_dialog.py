@@ -351,6 +351,8 @@ class SettingsDialog(QDialog):
         self._qwen_tab = self._build_qwen_tab()
         self._billing_tab = self._build_billing_tab()
         self._trial_tab = self._build_volc_trial_tab()
+        self._volc_api_key.textChanged.connect(self._on_own_key_edited)
+        self._qwen_api_key.textChanged.connect(self._on_own_key_edited)
         self._tabs.addTab(self._volc_tab, _icon("mountain"), " 火山引擎")
         self._tabs.addTab(self._qwen_tab, _icon("sparkles"), " Qwen")
         self._tabs.addTab(self._billing_tab, _icon("wallet"), " AI 模型与费用")
@@ -477,6 +479,13 @@ class SettingsDialog(QDialog):
             idx = self._tabs.indexOf(tab)
             if idx >= 0:
                 self._tabs.setTabVisible(idx, True)
+
+    def _on_own_key_edited(self, text: str) -> None:
+        text = text.strip()
+        if not text or text == self._volc_trial_token.text().strip():
+            return
+        if self._volc_trial_enabled.isChecked():
+            self._volc_trial_enabled.setChecked(False)
 
     def _test_qwen_key(self) -> None:
         from PySide6.QtWidgets import QMessageBox
