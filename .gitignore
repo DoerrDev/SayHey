@@ -1,0 +1,35 @@
+# Secrets & user config
+.env
+openapi.env
+settings.json
+
+# Runtime output
+usage_data.json
+history/
+logs/
+recordings/
+recordings_s2s/
+recordings_forward/
+
+# Build output
+dist/
+*.build/
+tools/updater/build_out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE & tools
+.idea/
+.vscode/
+.playwright-mcp/
+.claude/
+
+# Audio recordings
+*.wav
+
+# Server subproject (separate repo)
+SayHeyServer/

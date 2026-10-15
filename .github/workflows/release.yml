@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install deps
+        shell: cmd
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "nuitka>=2.4" zstandard
+
+      - name: Stamp version from tag
+        shell: cmd
+        run: python scripts\stamp_version.py %GITHUB_REF_NAME%
+
+      - name: Build SayHey main
+        shell: cmd
+        run: |
+          python -m nuitka ^
+            --mode=standalone ^
+            --windows-console-mode=disable ^
+            --output-dir=dist ^
+            --output-filename=sayhey ^
+            --windows-icon-from-ico=resource\app-icon.ico ^
+            --plugin-enable=pyside6 ^
+            --include-package=app_core ^
+            --include-package=gui ^
+            --include-package=core ^
+            --include-package=python_protogen ^
+            --include-data-dir=resource=resource ^
+            --include-data-dir=hotwords=hotwords ^
+            --include-module=sounddevice ^
+            --include-module=soundcard ^
+            --include-package-data=soundcard ^
+            --include-package=websockets ^
+            --include-module=google.protobuf ^
+            --include-module=numpy ^
+            --include-module=numpy.core ^
+            --follow-imports ^
+            --assume-yes-for-downloads ^
+            --lto=no ^
+            --jobs=2 ^
+            main.py
+
+      - name: Build updater
+        shell: cmd
+        working-directory: tools/updater
+        run: |
+          python -m nuitka ^
+            --standalone --onefile ^
+            --windows-console-mode=disable ^
+            --output-filename=updater_app.exe ^
+            --output-dir=build_out ^
+            updater.py
+
+      - name: Package dist
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Test-Path dist\sayhey) { Remove-Item -Recurse -Force dist\sayhey }
+          Move-Item dist\main.dist dist\sayhey
+          Copy-Item tools\updater\build_out\updater_app.exe dist\sayhey\updater_app.exe -Force
+          if (Test-Path dist\sayhey-windows.zip) { Remove-Item -Force dist\sayhey-windows.zip }
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            (Resolve-Path dist\sayhey).Path,
+            (Join-Path (Resolve-Path dist).Path 'sayhey-windows.zip'),
+            [System.IO.Compression.CompressionLevel]::Optimal, $false)
+          Get-Item dist\sayhey-windows.zip | Select-Object FullName, Length
+
+      - name: Prepare release notes
+        id: notes
+        shell: bash
+        run: |
+          if [ -s resource/release_log.md ]; then
+            echo "path=resource/release_log.md" >> "$GITHUB_OUTPUT"
+            echo "gen=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "gen=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        id: gh_release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/sayhey-windows.zip
+          body_path: ${{ steps.notes.outputs.path }}
+          generate_release_notes: ${{ steps.notes.outputs.gen }}
+          draft: false
+          prerelease: false
