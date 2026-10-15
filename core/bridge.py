@@ -9,7 +9,7 @@ from PySide6.QtCore import QThread, Signal
 
 from app_core.controller import VoiceTranslatorController, AppConfig, build_app_config
 from app_core.game_subtitle_controller import GameSubtitleController, GameSubtitleConfig, build_game_subtitle_config
-from app_core.typed_controller import TypedTranslateController, TypedConfig
+from app_core.typed_controller import TypedTranslateCancelled, TypedTranslateController, TypedConfig
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 
@@ -26,6 +26,7 @@ class ControllerThread(QThread):
         self._config = config
         self._controller: Optional[VoiceTranslatorController] = None
         self._translation_held = False
+        self._stop_requested = False
 
     def run(self) -> None:
         try:
@@ -36,6 +37,9 @@ class ControllerThread(QThread):
                 on_translation=self.sig_translation.emit,
             )
             self._controller.set_translation_held(self._translation_held)
+            # request_stop() may have arrived before the controller existed.
+            if self._stop_requested:
+                self._controller.request_stop()
             asyncio.run(self._controller.run())
         except asyncio.CancelledError:
             self.sig_status.emit("Stopped")
@@ -48,8 +52,10 @@ class ControllerThread(QThread):
             self.sig_stopped.emit()
 
     def request_stop(self) -> None:
-        if self._controller is not None:
-            self._controller.request_stop()
+        self._stop_requested = True
+        controller = self._controller
+        if controller is not None:
+            controller.request_stop()
 
     def set_translation_held(self, held: bool) -> None:
         self._translation_held = bool(held)
@@ -67,6 +73,7 @@ class GameSubtitleThread(QThread):
         super().__init__(parent)
         self._config = config
         self._controller: Optional[GameSubtitleController] = None
+        self._stop_requested = False
 
     def run(self) -> None:
         try:
@@ -75,6 +82,8 @@ class GameSubtitleThread(QThread):
                 on_status=self.sig_status.emit,
                 on_subtitle=self.sig_subtitle.emit,
             )
+            if self._stop_requested:
+                self._controller.request_stop()
             asyncio.run(self._controller.run())
         except asyncio.CancelledError:
             self.sig_status.emit("Game subtitles stopped")
@@ -87,8 +96,10 @@ class GameSubtitleThread(QThread):
             self.sig_stopped.emit()
 
     def request_stop(self) -> None:
-        if self._controller is not None:
-            self._controller.request_stop()
+        self._stop_requested = True
+        controller = self._controller
+        if controller is not None:
+            controller.request_stop()
 
 
 class TypedTranslateThread(QThread):
@@ -107,11 +118,16 @@ class TypedTranslateThread(QThread):
             self._controller.on_status = self.sig_status.emit
             self._controller.on_result = lambda s, t: self.sig_result.emit(s, t)
             self._controller.translate_and_send(self._text)
+        except TypedTranslateCancelled:
+            pass
         except Exception as exc:
             self.sig_error.emit(str(exc))
             traceback.print_exc()
         finally:
             self.sig_done.emit()
+
+    def request_stop(self) -> None:
+        self._controller.request_cancel()
 
 
 def build_mic_config(env_path: Path = _ENV_PATH) -> AppConfig:

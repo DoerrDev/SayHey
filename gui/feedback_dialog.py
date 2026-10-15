@@ -346,20 +346,20 @@ class FeedbackDialog(QDialog):
             self._ack_unread_async()
 
     def _ack_unread_async(self) -> None:
+        if self._ack_thread is not None and self._ack_thread.isRunning():
+            return
         base, mid = self._api_base, self._machine_id
-        try:
+
+        def fetch_and_ack() -> object:
             rows = _api_get(f"{base}/api/messages", mid)
-        except Exception:
-            return
-        if not isinstance(rows, list) or not rows:
-            return
-        ids = [int(row["id"]) for row in rows if "id" in row]
-        if not ids:
-            return
-        self._ack_thread = _NetThread(
-            lambda: _api_post(f"{base}/api/messages/ack", {"ids": ids}, mid),
-            self,
-        )
+            if not isinstance(rows, list):
+                return None
+            ids = [int(row["id"]) for row in rows if "id" in row]
+            if not ids:
+                return None
+            return _api_post(f"{base}/api/messages/ack", {"ids": ids}, mid)
+
+        self._ack_thread = _NetThread(fetch_and_ack, self)
         self._ack_thread.sig_done.connect(lambda *_: None)
         self._ack_thread.start()
 

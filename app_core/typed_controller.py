@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +20,12 @@ from app_core.typed_engine import (
 
 StatusCallback = Callable[[str], None]
 TextCallback = Callable[[str, str], None]  # source, translated
+
+_CANCEL_POLL_SEC = 0.1
+
+
+class TypedTranslateCancelled(Exception):
+    """Raised from translate_and_send() after request_cancel()."""
 
 
 @dataclass
@@ -44,6 +51,33 @@ class TypedTranslateController:
         self.on_result = on_result
         self._resolver = DeviceResolver()
         self._sink: Optional[AudioOutputSink] = None
+        self._cancel = threading.Event()
+
+    def request_cancel(self) -> None:
+        """Thread-safe: abort the in-flight translate_and_send() at the next checkpoint."""
+        self._cancel.set()
+
+    def reset_cancel(self) -> None:
+        self._cancel.clear()
+
+    def _check_cancel(self) -> None:
+        if self._cancel.is_set():
+            raise TypedTranslateCancelled()
+
+    async def _run_cancellable(self, coro) -> None:
+        task = asyncio.ensure_future(coro)
+        while not task.done():
+            if self._cancel.is_set():
+                task.cancel()
+                break
+            await asyncio.wait({task}, timeout=_CANCEL_POLL_SEC)
+        try:
+            await task
+        except asyncio.CancelledError:
+            raise TypedTranslateCancelled() from None
+        # The coroutine may swallow the cancellation and return normally (e.g.
+        # asyncio.wait_for before 3.12 when recv() completes at the same time).
+        self._check_cancel()
 
     def _emit(self, msg: str) -> None:
         if self.on_status:
@@ -56,6 +90,7 @@ class TypedTranslateController:
         candidates = self._resolver.stable_output_candidates(cable)
         retry_delays = (0.0, 0.3, 0.6, 1.0)
         for attempt, delay in enumerate(retry_delays):
+            self._check_cancel()
             if delay > 0:
                 self._emit(f"[typed] CABLE 设备繁忙，{int(delay * 1000)}ms 后重试 (#{attempt})")
                 time.sleep(delay)
@@ -113,6 +148,7 @@ class TypedTranslateController:
             translated = doubao_translate_text(
                 self.cfg.translate, text, self.cfg.source_language, self.cfg.target_language, self._emit
             )
+        self._check_cancel()
         self._emit(f"[typed] 翻译完成：{translated[:60]}")
         if self.on_result:
             self.on_result(text, translated)
@@ -126,7 +162,7 @@ class TypedTranslateController:
 
         if self.cfg.engine_name == "qwen":
             tts = self.cfg.qwen_tts or QwenTtsConfig(api_key="")
-            asyncio.run(qwen_tts_stream(tts, translated, on_pcm, self._emit))
+            asyncio.run(self._run_cancellable(qwen_tts_stream(tts, translated, on_pcm, self._emit)))
         else:
-            asyncio.run(doubao_tts_stream(self.cfg.tts, translated, on_pcm, self._emit))
+            asyncio.run(self._run_cancellable(doubao_tts_stream(self.cfg.tts, translated, on_pcm, self._emit)))
         self._emit("[typed] TTS 完成")

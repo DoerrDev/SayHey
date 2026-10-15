@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import time
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import QThread, QTimer, Qt, Signal, Slot
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QDialog,
     QHBoxLayout,
@@ -25,7 +27,7 @@ from core.settings_store import AppSettings, SettingsStore
 from gui.device_checklist import DeviceChecklistPanel
 from gui.game_panel import GameSubtitlePanel
 from gui.header_bar import HeaderBar
-from gui.log_panel import RuntimeLogPanel
+from gui.log_panel import RuntimeLogPanel, is_verbose_status
 from gui.mic_panel import MicTranslatePanel
 from gui.mic_area import MicAreaPanel
 from gui.float_input import FloatingInputWindow
@@ -41,9 +43,19 @@ from gui.settings_dialog import SettingsDialog
 from gui.usage_dialog import UsageDialog
 from gui.voice_selector_dialog import VoiceSelectorDialog, voice_is_s2s
 from gui.error_messages import friendly_runtime_error
+from core.runtime_log import close_runtime_log
 from core.usage_tracker import UsageTracker
 
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+
+# Must exceed the longest blocking network call a background thread can be in
+# (update checker HTTP_TIMEOUT = 8s, message poller FETCH_TIMEOUT_SEC = 5s).
+_SHUTDOWN_TIMEOUT_SEC = 10.0
+_SHUTDOWN_POLL_MS = 100
+
+# Threads that did not finish before the shutdown deadline. Detached from the
+# window and kept referenced so they are not destroyed while still running.
+_orphan_threads: list[QThread] = []
 
 
 def _list_speaker_names() -> list[str]:
@@ -209,6 +221,12 @@ class MainWindow(QMainWindow):
         self._typed_thread: Optional[TypedTranslateThread] = None
         self._typed_busy = False
 
+        # Shutdown state (see closeEvent)
+        self._shutdown_threads: Optional[list[QThread]] = None
+        self._shutdown_deadline = 0.0
+        self._shutdown_timer: Optional[QTimer] = None
+        self._shutdown_complete = False
+
         # Global hotkeys
         self._hotkeys = HotkeyManager()
         self._hold_translate_hotkey = HoldHotkeyMonitor(self)
@@ -331,6 +349,7 @@ class MainWindow(QMainWindow):
             self._typed_controller = TypedTranslateController(cfg)
         else:
             self._typed_controller.cfg = cfg
+            self._typed_controller.reset_cancel()
         return self._typed_controller
 
     @Slot(str)
@@ -401,6 +420,8 @@ class MainWindow(QMainWindow):
         self._typed_busy = False
         self._typed_panel.set_busy(False)
         self._log_panel.append(f"[typed-error] {msg}")
+        if self._shutting_down:
+            return
         QMessageBox.warning(self, "打字翻译失败", msg)
 
     def _apply_hotkeys(self, s: AppSettings) -> None:
@@ -647,7 +668,8 @@ class MainWindow(QMainWindow):
         self._log_panel.append("麦克风翻译已停止")
         if self._restart_mic_after_stop:
             self._restart_mic_after_stop = False
-            self._start_mic()
+            if not self._shutting_down:
+                self._start_mic()
 
     @Slot(str)
     def _on_mic_error(self, msg: str) -> None:
@@ -657,6 +679,8 @@ class MainWindow(QMainWindow):
         msg = friendly_runtime_error(msg)
         if "token_in_use" in msg:
             msg = "这个 token 已经被人占用啦（阿里一 token 一人的限制，建议切换火山引擎）"
+        if self._shutting_down:
+            return
         QMessageBox.critical(self, "运行错误", msg)
 
     def _is_cable_input_device(self, name: str) -> bool:
@@ -766,12 +790,15 @@ class MainWindow(QMainWindow):
         self._game_panel.set_running(False)
         self._game_thread = None
         msg = friendly_runtime_error(msg)
+        if self._shutting_down:
+            return
         QMessageBox.critical(self, "游戏字幕错误", msg)
 
     @Slot(str)
     def _on_status(self, msg: str) -> None:
-        kind = "error" if "error" in msg.lower() else "normal"
-        self._header.set_status(msg, kind)
+        if not is_verbose_status(msg):
+            kind = "error" if "error" in msg.lower() else "normal"
+            self._header.set_status(msg, kind)
         self._log_panel.append(msg)
         friendly = friendly_runtime_error(msg)
         if friendly != msg:
@@ -897,20 +924,85 @@ class MainWindow(QMainWindow):
         from dataclasses import replace
         self._store.save(replace(s, overlay_x=x, overlay_y=y))
 
+    @property
+    def _shutting_down(self) -> bool:
+        return self._shutdown_threads is not None
+
     def closeEvent(self, event) -> None:
-        if self._mic_thread and self._mic_thread.isRunning():
-            self._mic_thread.request_stop()
-            self._mic_thread.wait(3000)
-        if self._game_thread and self._game_thread.isRunning():
-            self._game_thread.request_stop()
-            self._game_thread.wait(3000)
-        if getattr(self, "_msg_poller", None) and self._msg_poller.isRunning():
-            self._msg_poller.request_stop()
-            self._msg_poller.wait(2000)
-        self._overlay.close()
-        self._float_input.close()
+        # Closing is two-phase: the first close request stops every background
+        # thread and is ignored; once they have all finished (or the deadline
+        # passes) _finish_shutdown() closes the window again for real.
+        if self._shutdown_complete:
+            super().closeEvent(event)
+            return
+        event.ignore()
+        if not self._shutting_down:
+            self._begin_shutdown()
+
+    def _running_background_threads(self) -> list[QThread]:
+        threads = [
+            self._mic_thread,
+            self._game_thread,
+            self._typed_thread,
+            getattr(self, "_msg_poller", None),
+            getattr(self, "_update_thread", None),
+        ]
+        return [t for t in threads if t is not None and t.isRunning()]
+
+    def _begin_shutdown(self) -> None:
+        self._restart_mic_after_stop = False
+        # Hide (not close) the other top-level windows: closing the last visible
+        # one would make Qt quit before the threads are done.
+        self.hide()
+        self._overlay.hide()
+        self._float_input.hide()
         self._hotkeys.unregister_all()
-        if self._typed_controller is not None:
+
+        threads = self._running_background_threads()
+        for t in threads:
+            request_stop = getattr(t, "request_stop", None)
+            if request_stop is not None:
+                request_stop()
+            else:
+                t.quit()
+        self._shutdown_threads = threads
+        self._shutdown_deadline = time.monotonic() + _SHUTDOWN_TIMEOUT_SEC
+        self._shutdown_timer = QTimer(self)
+        self._shutdown_timer.setInterval(_SHUTDOWN_POLL_MS)
+        self._shutdown_timer.timeout.connect(self._poll_shutdown)
+        self._shutdown_timer.start()
+        # Deferred, not called directly: we are still inside closeEvent, and a
+        # nested close() from _finish_shutdown() would be ignored by Qt.
+        QTimer.singleShot(0, self._poll_shutdown)
+
+    @Slot()
+    def _poll_shutdown(self) -> None:
+        if self._shutdown_complete or self._shutdown_threads is None:
+            return
+        pending = [t for t in self._shutdown_threads if t.isRunning()]
+        if pending and time.monotonic() < self._shutdown_deadline:
+            return
+        if self._shutdown_timer is not None:
+            self._shutdown_timer.stop()
+        for t in pending:
+            print(f"[shutdown] {type(t).__name__} still running after {_SHUTDOWN_TIMEOUT_SEC:.0f}s, detaching")
+            t.setParent(None)
+            _orphan_threads.append(t)
+        self._finish_shutdown(typed_thread_done=self._typed_thread not in pending)
+
+    def _finish_shutdown(self, typed_thread_done: bool) -> None:
+        # Audio resources are released only after the thread using them is gone.
+        if self._typed_controller is not None and typed_thread_done:
             self._typed_controller.close()
             self._typed_controller = None
-        super().closeEvent(event)
+        self._overlay.close()
+        self._float_input.close()
+        self._usage_tracker.flush()
+        close_runtime_log()
+        self._shutdown_complete = True
+        self.close()
+        # The window was already hidden in _begin_shutdown, so this close() no
+        # longer counts as "last window closed"; quit explicitly instead.
+        app = QApplication.instance()
+        if app is not None and app.quitOnLastWindowClosed():
+            app.quit()

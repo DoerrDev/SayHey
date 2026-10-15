@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
+import os
 import re
 import threading
 from dataclasses import dataclass, field
@@ -162,11 +164,23 @@ class UsageTracker:
     """Parses usage log lines, accumulates session + total cost, persists daily."""
 
     MAX_EVENTS = 5000
+    SAVE_DELAY_SEC = 5.0
 
-    def __init__(self, store_path: Path, on_update: Optional[Callable[[UsageState], None]] = None) -> None:
+    def __init__(
+        self,
+        store_path: Path,
+        on_update: Optional[Callable[[UsageState], None]] = None,
+        save_delay: float = SAVE_DELAY_SEC,
+    ) -> None:
         self._path = store_path
         self._on_update = on_update
         self._lock = threading.Lock()
+        # Saves are coalesced: _record() only marks the state dirty and arms a
+        # timer, so bursts of billing events cost one write off the GUI thread.
+        self._save_delay = save_delay
+        self._save_io_lock = threading.Lock()
+        self._save_timer: Optional[threading.Timer] = None
+        self._dirty = False
         self.state = UsageState()
         self._load()
 
@@ -208,8 +222,30 @@ class UsageTracker:
             self.state.events.append(ev)
             if len(self.state.events) > self.MAX_EVENTS:
                 self.state.events = self.state.events[-self.MAX_EVENTS:]
-            self._save_locked()
+            self._schedule_save_locked()
         self._notify()
+
+    def flush(self) -> None:
+        """Write pending changes now (call on shutdown)."""
+        with self._lock:
+            if self._save_timer is not None:
+                self._save_timer.cancel()
+                self._save_timer = None
+        self._save_if_dirty()
+
+    def _schedule_save_locked(self) -> None:
+        self._dirty = True
+        if self._save_timer is not None:
+            return
+        timer = threading.Timer(self._save_delay, self._on_save_timer)
+        timer.daemon = True
+        self._save_timer = timer
+        timer.start()
+
+    def _on_save_timer(self) -> None:
+        with self._lock:
+            self._save_timer = None
+        self._save_if_dirty()
 
     def _notify(self) -> None:
         if self._on_update:
@@ -218,30 +254,43 @@ class UsageTracker:
             except Exception:
                 pass
 
-    def _save_locked(self) -> None:
-        data = {
+    def _snapshot_locked(self) -> dict:
+        return {
             "total_cost": self.state.total_cost,
             "total_events": self.state.total_events,
             "total_tokens": self.state.total_tokens,
-            "daily": self.state.daily,
+            "daily": copy.deepcopy(self.state.daily),
             "events": [
                 {
                     "ts": e.ts,
                     "source": e.source,
                     "session_id": e.session_id,
                     "duration_ms": e.duration_ms,
-                    "tokens": e.tokens,
+                    "tokens": dict(e.tokens),
                     "cost": e.cost,
                     "provider": e.provider,
                 }
                 for e in self.state.events
             ],
         }
-        try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-        except Exception:
-            pass
+
+    def _save_if_dirty(self) -> None:
+        # _save_io_lock keeps the timer thread and flush() from writing at once;
+        # the state lock is only held while taking the snapshot.
+        with self._save_io_lock:
+            with self._lock:
+                if not self._dirty:
+                    return
+                data = self._snapshot_locked()
+                self._dirty = False
+            tmp = self._path.with_name(self._path.name + ".tmp")
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+                os.replace(tmp, self._path)
+            except Exception:
+                with self._lock:
+                    self._schedule_save_locked()
 
     def _load(self) -> None:
         if not self._path.exists():

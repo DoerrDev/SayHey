@@ -413,6 +413,9 @@ class QwenLiveTranslateEngine:
 # ---------- src==tgt 旁路：ASR + TTS（不经翻译） ----------
 
 
+_QWEN_TTS_QUEUE_SIZE = 16
+
+
 class QwenAsrTtsEngine:
     """src==tgt 场景：使用 LiveTranslate 仅做 ASR，再把识别结果直接 TTS 出来。"""
 
@@ -436,7 +439,11 @@ class QwenAsrTtsEngine:
         self.audio_segment_id = 0
         self.dropped_audio_chunks = 0
         self._source_acc = ""
-        self._tts_tasks: list[asyncio.Task] = []
+        # 识别完成的句子按顺序进入有界队列，由单个 worker 串行合成并推送，
+        # 避免多句 TTS 并发向同一输出端推流造成音频交错。
+        self.tts_queue: Optional[asyncio.Queue[tuple[str, int] | None]] = None
+        self.tts_task: Optional[asyncio.Task] = None
+        self.dropped_tts_sentences = 0
 
     async def start(self, config: TranslatorConfig, on_event: TranslatorEventCallback) -> None:
         self.config = config
@@ -457,6 +464,8 @@ class QwenAsrTtsEngine:
             "type": "session.update",
             "session": session,
         }, ensure_ascii=False))
+        self.tts_queue = asyncio.Queue(maxsize=_QWEN_TTS_QUEUE_SIZE)
+        self.tts_task = asyncio.create_task(self._tts_loop())
         self.sender_task = asyncio.create_task(self._send_loop())
         self.receiver_task = asyncio.create_task(self._receive_loop())
         self._emit("status", message="[qwen-asr+tts] session.update sent")
@@ -501,9 +510,14 @@ class QwenAsrTtsEngine:
             except asyncio.CancelledError:
                 pass
             self.receiver_task = None
-        for t in self._tts_tasks:
-            t.cancel()
-        self._tts_tasks.clear()
+        if self.tts_task is not None:
+            self.tts_task.cancel()
+            try:
+                await self.tts_task
+            except asyncio.CancelledError:
+                pass
+            self.tts_task = None
+        self.tts_queue = None
         if self.ws is not None:
             await self.ws.close()
             self.ws = None
@@ -559,14 +573,46 @@ class QwenAsrTtsEngine:
                         seg = self.audio_segment_id
                         self._emit("source_text", text=t)
                         self._emit("translated_text", text=t)
-                        task = asyncio.create_task(self._run_tts(t, seg))
-                        self._tts_tasks.append(task)
+                        self._enqueue_tts(t, seg)
                     self._source_acc = ""
                     continue
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             self._emit("error", message=f"qwen recv failed: {exc}")
+
+    def _enqueue_tts(self, text: str, segment_id: int) -> None:
+        if self.tts_queue is None:
+            return
+        item = (text, segment_id)
+        try:
+            self.tts_queue.put_nowait(item)
+            return
+        except asyncio.QueueFull:
+            pass
+        # 合成速度跟不上说话速度：丢掉最旧的一句，保证队列有界、延迟不无限累积。
+        self.dropped_tts_sentences += 1
+        try:
+            self.tts_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+        try:
+            self.tts_queue.put_nowait(item)
+        except asyncio.QueueFull:
+            pass
+        self._emit(
+            "status",
+            message=f"[qwen-tts-drop] tts queue full, dropped {self.dropped_tts_sentences} sentence(s)",
+        )
+
+    async def _tts_loop(self) -> None:
+        assert self.tts_queue is not None
+        while True:
+            item = await self.tts_queue.get()
+            if item is None:
+                break
+            text, segment_id = item
+            await self._run_tts(text, segment_id)
 
     async def _run_tts(self, text: str, segment_id: int) -> None:
         cfg = QwenTtsConfig(api_key=self.api_key, voice=self.voice, realtime_url=self.realtime_url)

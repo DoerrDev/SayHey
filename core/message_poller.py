@@ -10,6 +10,10 @@ from PySide6.QtCore import QThread, Signal
 from core.machine_id import get_machine_id_hash
 from core.version import __version__
 
+# Kept short: MainWindow waits for this thread on exit and a blocked urlopen
+# can't observe request_stop().
+FETCH_TIMEOUT_SEC = 5
+
 
 class MessagePoller(QThread):
     sig_unread_count = Signal(int)
@@ -37,7 +41,7 @@ class MessagePoller(QThread):
                 "X-Client-Os": f"{platform.system()} {platform.release()}",
             },
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=FETCH_TIMEOUT_SEC) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         return int(data.get("count", 0))
 

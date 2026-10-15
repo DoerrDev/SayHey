@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import deque
 from datetime import datetime
-from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -15,11 +14,34 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.runtime_log import runtime_log
 from gui.icons import resource_pixmap
 
-_LOG_PATH = Path(__file__).resolve().parent.parent / "logs" / "runtime.log"
 _MAX_LINES = 10000
 _MAX_EVENTS = 6
+
+# High-frequency diagnostic tags (per audio frame / per protocol event). They go
+# to the full log only, so they neither flood "最近状态" nor rebuild its rows.
+_VERBOSE_TAGS = (
+    "[typed-tts-raw]",
+    "[typed-mt-raw]",
+    "[qwen-tts-evt]",
+    "[qwen-mt-raw]",
+    "[qwen-mt-hotwords]",
+    "[out-level]",
+    "[audio-status]",
+    "[usage]",
+    "[game-s2t-usage]",
+    "[mt-usage]",
+    "[tts-usage]",
+    "[qwen-mt-usage]",
+    "[qwen-realtime-usage]",
+    "[qwen-tts-usage]",
+)
+
+
+def is_verbose_status(message: str) -> bool:
+    return message.startswith(_VERBOSE_TAGS)
 
 
 def _message_kind(message: str) -> str:
@@ -73,7 +95,7 @@ class RuntimeLogPanel(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("card")
-        self._events: deque[tuple[str, str, str]] = deque(maxlen=_MAX_EVENTS)
+        self._event_rows: deque[_EventRow] = deque()
         self._log_expanded = False
 
         layout = QVBoxLayout(self)
@@ -100,6 +122,11 @@ class RuntimeLogPanel(QFrame):
         self._events_layout = QVBoxLayout(self._events_container)
         self._events_layout.setContentsMargins(0, 0, 0, 0)
         self._events_layout.setSpacing(9)
+        self._empty_label = QLabel("运行中的关键状态会显示在这里，方便快速判断当前卡在哪一步。")
+        self._empty_label.setObjectName("panelDesc")
+        self._empty_label.setWordWrap(True)
+        self._events_layout.addWidget(self._empty_label)
+        self._events_layout.addStretch()
         layout.addWidget(self._events_container)
 
         self._edit = QPlainTextEdit()
@@ -110,45 +137,27 @@ class RuntimeLogPanel(QFrame):
         self._edit.setMinimumHeight(130)
         layout.addWidget(self._edit)
 
-        self._render_events()
-
     def append(self, message: str) -> None:
         stamp = datetime.now().strftime("%H:%M")
-        kind = _message_kind(message)
-        self._events.appendleft((stamp, message, kind))
-        self._render_events()
+        line = f"[{stamp}] {message}"
+        if not is_verbose_status(message):
+            self._add_event(stamp, message, _message_kind(message))
 
-        self._edit.appendPlainText(f"[{stamp}] {message}")
+        self._edit.appendPlainText(line)
         self._edit.verticalScrollBar().setValue(self._edit.verticalScrollBar().maximum())
-        self._write_to_file(f"[{stamp}] {message}")
+        runtime_log().write(line)
 
-    def _render_events(self) -> None:
-        while self._events_layout.count():
-            item = self._events_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-
-        if not self._events:
-            empty = QLabel("运行中的关键状态会显示在这里，方便快速判断当前卡在哪一步。")
-            empty.setObjectName("panelDesc")
-            empty.setWordWrap(True)
-            self._events_layout.addWidget(empty)
-            return
-
-        for stamp, message, kind in self._events:
-            self._events_layout.addWidget(_EventRow(stamp, message, kind))
-        self._events_layout.addStretch()
+    def _add_event(self, stamp: str, message: str, kind: str) -> None:
+        self._empty_label.setVisible(False)
+        row = _EventRow(stamp, message, kind)
+        self._events_layout.insertWidget(1, row)
+        self._event_rows.appendleft(row)
+        while len(self._event_rows) > _MAX_EVENTS:
+            old = self._event_rows.pop()
+            self._events_layout.removeWidget(old)
+            old.deleteLater()
 
     def _toggle_log(self) -> None:
         self._log_expanded = not self._log_expanded
         self._edit.setVisible(self._log_expanded)
         self._toggle_btn.setText("收起运行日志" if self._log_expanded else "展开运行日志")
-
-    def _write_to_file(self, message: str) -> None:
-        try:
-            _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with _LOG_PATH.open("a", encoding="utf-8") as file:
-                file.write(message + "\n")
-        except OSError:
-            pass
