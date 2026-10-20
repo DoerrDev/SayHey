@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual runs build + smoke test and upload the zip as an artifact only;
+  # the GitHub Release is created for tag pushes.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -21,15 +24,31 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            build/constraints.txt
 
+      # Every build dependency is pinned in build/constraints.txt; unpinned
+      # "latest" Nuitka/PySide6 once shipped an exe that crashed on start.
       - name: Install deps
         shell: cmd
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install "nuitka>=2.4" zstandard
+          pip install -r requirements.txt zstandard -c build/constraints.txt
+          pip check
+          python -m nuitka --version
+
+      - name: Cache Nuitka build cache
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/Nuitka/Nuitka/Cache
+          key: nuitka-${{ runner.os }}-${{ hashFiles('build/constraints.txt') }}-${{ github.sha }}
+          restore-keys: |
+            nuitka-${{ runner.os }}-${{ hashFiles('build/constraints.txt') }}-
 
       - name: Stamp version from tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: cmd
         run: python scripts\stamp_version.py %GITHUB_REF_NAME%
 
@@ -59,8 +78,30 @@ jobs:
             --follow-imports ^
             --assume-yes-for-downloads ^
             --lto=no ^
-            --jobs=2 ^
+            --jobs=4 ^
             main.py
+
+      # Launch the built exe headless and require it to stay alive, so a crash
+      # on startup (e.g. a Nuitka segfault) fails the build instead of shipping.
+      # Runs from a copy: the app writes settings.json/logs next to the exe.
+      - name: Smoke test sayhey.exe
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'sayhey-smoke'
+          Copy-Item dist\main.dist $dir -Recurse -Force
+          $out = Join-Path $env:RUNNER_TEMP 'smoke_out.txt'
+          $err = Join-Path $env:RUNNER_TEMP 'smoke_err.txt'
+          $p = Start-Process -FilePath (Join-Path $dir 'sayhey.exe') -WorkingDirectory $dir -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+          $null = $p.Handle  # keep the handle so ExitCode is readable after exit
+          if ($p.WaitForExit(20000)) {
+            Get-Content $out, $err -ErrorAction SilentlyContinue
+            throw "sayhey.exe exited during startup with code $($p.ExitCode)"
+          }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "sayhey.exe still running after 20s: OK"
 
       - name: Build updater
         shell: cmd
@@ -88,7 +129,15 @@ jobs:
             [System.IO.Compression.CompressionLevel]::Optimal, $false)
           Get-Item dist\sayhey-windows.zip | Select-Object FullName, Length
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sayhey-windows
+          path: dist/sayhey-windows.zip
+          retention-days: 14
+
       - name: Prepare release notes
+        if: startsWith(github.ref, 'refs/tags/')
         id: notes
         shell: bash
         run: |
@@ -101,6 +150,7 @@ jobs:
           fi
 
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
