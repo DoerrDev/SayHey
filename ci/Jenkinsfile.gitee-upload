@@ -1,0 +1,93 @@
+// Jenkins job "sayhey-gitee-upload" (Pipeline script from SCM, script path
+// ci/Jenkinsfile.gitee-upload). Triggered by .github/workflows/release.yml
+// after the GitHub Release exists. Downloads the release zip from GitHub and
+// uploads it to the matching Gitee release (created by the workflow).
+//
+// Needs a Jenkins credential "gitee-token" (Secret text). No jq required.
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'TAG', defaultValue: '', description: 'Release tag, e.g. v1.0.2')
+        string(name: 'RID', defaultValue: '', description: 'Gitee release id (numeric)')
+    }
+
+    options {
+        timeout(time: 20, unit: 'MINUTES')
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        GH_REPO    = 'DoerrDev/SayHey'
+        GITEE_REPO = 'doerrdev/SayHey'
+        ASSET      = 'sayhey-windows.zip'
+    }
+
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    if (!(params.TAG ==~ /^v[0-9][0-9A-Za-z._-]*$/)) {
+                        error("Bad TAG: '${params.TAG}'")
+                    }
+                    if (!(params.RID ==~ /^[0-9]+$/)) {
+                        error("Bad RID: '${params.RID}'")
+                    }
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.TAG}"
+                }
+            }
+        }
+
+        stage('Download from GitHub') {
+            steps {
+                sh '''
+                    set -eu
+                    rm -f "$ASSET"
+                    # The Release is created right before this job is triggered;
+                    # retry on 404 in case of propagation delay.
+                    curl -fL --retry 5 --retry-delay 10 --retry-all-errors \
+                        --connect-timeout 30 --max-time 600 \
+                        -o "$ASSET" \
+                        "https://github.com/$GH_REPO/releases/download/$TAG/$ASSET"
+                    ls -l "$ASSET"
+                '''
+            }
+        }
+
+        stage('Upload to Gitee') {
+            steps {
+                withCredentials([string(credentialsId: 'gitee-token', variable: 'GITEE_TOKEN')]) {
+                    // single-quoted: the secret is expanded by the shell, never by Groovy
+                    sh '''
+                        set -u
+                        API="https://gitee.com/api/v5/repos/$GITEE_REPO/releases/$RID/attach_files"
+                        for i in 1 2 3; do
+                            # abort stalled uploads (<30KB/s for 60s) instead of hanging
+                            code=$(curl -sS -o upload.json -w '%{http_code}' \
+                                --connect-timeout 30 --max-time 900 \
+                                --speed-limit 30000 --speed-time 60 \
+                                -X POST "$API" \
+                                --form-string "access_token=$GITEE_TOKEN" \
+                                -F "file=@$ASSET") || code=000
+                            echo "attempt $i: HTTP $code"
+                            cat upload.json 2>/dev/null; echo
+                            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+                                exit 0
+                            fi
+                            sleep 15
+                        done
+                        echo "upload failed after 3 attempts" >&2
+                        exit 1
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        cleanup {
+            sh 'rm -f sayhey-windows.zip upload.json'
+        }
+    }
+}

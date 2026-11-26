@@ -178,19 +178,16 @@ jobs:
   # Release, and can be re-run on its own without rebuilding.
   gitee-mirror:
     needs: build
+    timeout-minutes: 15
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    outputs:
+      rid: ${{ steps.release.outputs.rid }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: sayhey-windows
-          path: dist
 
       - name: Push mirror to Gitee
         shell: bash
@@ -204,6 +201,7 @@ jobs:
           for i in 1 2 3; do git push gitee "${GITHUB_REF}" --force && break || sleep 10; done
 
       - name: Mirror release to Gitee
+        id: release
         shell: bash
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
@@ -222,7 +220,7 @@ jobs:
           # call <outfile> <curl args...>: print HTTP status + body on failure
           call() {
             out="$1"; shift
-            code=$(curl -s -o "$out" -w '%{http_code}' --connect-timeout 30 "$@") || code=000
+            code=$(curl -sS -o "$out" -w '%{http_code}' --connect-timeout 30 "$@") || code=000
             if [ "$code" -ge 400 ] || [ "$code" = 000 ]; then
               echo "HTTP $code from: $*" | sed "s/${GITEE_TOKEN}/***/g"
               cat "$out" 2>/dev/null; echo
@@ -247,12 +245,30 @@ jobs:
           fi
           echo "Gitee release id: $RID"
 
-          # 2) upload zip asset
-          ls -l dist/sayhey-windows.zip
-          for i in 1 2 3; do
-            call /tmp/att.json --max-time 1800 -X POST "${API}/${RID}/attach_files" \
-              --form-string "access_token=${GITEE_TOKEN}" \
-              -F "file=@dist/sayhey-windows.zip" && break
-            [ "$i" = 3 ] && exit 1
-            sleep 15
-          done
+          echo "rid=$RID" >> "$GITHUB_OUTPUT"
+          # The zip is uploaded by Jenkins (HK, close to Gitee): see jenkins-notify.
+
+  # Hand the big upload to Jenkins: GitHub's US runners can't push 60MB+ to
+  # Gitee reliably. Runs after the GitHub Release exists so Jenkins can
+  # download the asset from it.
+  jenkins-notify:
+    needs: [github-release, gitee-mirror]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger Jenkins gitee-upload job
+        shell: bash
+        env:
+          JENKINS_USER: ${{ secrets.JENKINS_USER }}
+          JENKINS_TOKEN: ${{ secrets.JENKINS_TOKEN }}
+          RID: ${{ needs.gitee-mirror.outputs.rid }}
+        run: |
+          TAG="${GITHUB_REF##*/}"
+          code=$(curl -sS -o /tmp/out.txt -w '%{http_code}' --max-time 60 \
+            --retry 3 --retry-delay 10 --retry-all-errors \
+            -u "${JENKINS_USER}:${JENKINS_TOKEN}" -X POST \
+            --data-urlencode "TAG=${TAG}" --data-urlencode "RID=${RID}" \
+            "https://jenkins.doerr.work/job/sayhey-gitee-upload/buildWithParameters")
+          echo "Jenkins responded HTTP $code"
+          cat /tmp/out.txt
+          [ "$code" -lt 400 ]
