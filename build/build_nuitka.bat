@@ -23,6 +23,8 @@ python -m nuitka ^
     --include-package=core ^
     --include-package=python_protogen ^
     --include-data-dir=resource=resource ^
+    --noinclude-data-files=resource/brand-banner.png ^
+    --noinclude-data-files=resource/MainPannel.png ^
     --include-data-dir=hotwords=hotwords ^
     --include-module=sounddevice ^
     --include-module=soundcard ^
