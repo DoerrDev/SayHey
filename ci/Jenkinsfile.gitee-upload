@@ -60,19 +60,27 @@ pipeline {
                 withCredentials([string(credentialsId: 'gitee-token', variable: 'GITEE_TOKEN')]) {
                     // single-quoted: the secret is expanded by the shell, never by Groovy
                     sh '''
+                        # Jenkins runs sh with -e; disable it so the retry loop works
+                        set +e
                         set -u
                         API="https://gitee.com/api/v5/repos/$GITEE_REPO/releases/$RID/attach_files"
                         for i in 1 2 3; do
-                            # abort stalled uploads (<30KB/s for 60s) instead of hanging
-                            code=$(curl -sS -o upload.json -w '%{http_code}' \
+                            rm -f upload.json
+                            # abort stalled uploads (<30KB/s for 60s) instead of hanging.
+                            # No Expect: 100-continue, HTTP/1.1 only; print timings to see
+                            # whether the connection dies mid-upload or while waiting.
+                            curl -sS --http1.1 -H 'Expect:' -o upload.json \
+                                -w 'http=%{http_code} sent=%{size_upload}B connect=%{time_connect}s pretransfer=%{time_pretransfer}s total=%{time_total}s\n' \
                                 --connect-timeout 30 --max-time 900 \
                                 --speed-limit 30000 --speed-time 60 \
                                 -X POST "$API" \
                                 --form-string "access_token=$GITEE_TOKEN" \
-                                -F "file=@$ASSET") || code=000
-                            echo "attempt $i: HTTP $code"
-                            cat upload.json 2>/dev/null; echo
-                            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+                                -F "file=@$ASSET"
+                            rc=$?
+                            echo "attempt $i: curl exit $rc"
+                            [ -f upload.json ] && { cat upload.json; echo; }
+                            # success = curl ok and response contains the attachment (id/name)
+                            if [ "$rc" -eq 0 ] && grep -q '"name"' upload.json 2>/dev/null; then
                                 exit 0
                             fi
                             sleep 15
