@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from core.version import __version__
 
 GITHUB_API = "https://api.github.com/repos/DoerrDev/SayHey/releases/latest"
-GITEE_API = "https://gitee.com/api/v5/repos/chenjunbin2345/SayHey/releases/latest"
+GITEE_API = "https://gitee.com/api/v5/repos/doerrdev/SayHey/releases/latest"
 HTTP_TIMEOUT = 8
 
 
