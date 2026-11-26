@@ -189,22 +189,42 @@ jobs:
             NOTES="Auto release $TAG"
           fi
 
-          # 1) create gitee release
-          RID=$(curl -sf --retry 5 --retry-delay 10 --retry-all-errors \
-            --connect-timeout 30 --max-time 120 \
-            -X POST "https://gitee.com/api/v5/repos/${REPO}/releases" \
-            -H "Content-Type: application/json;charset=UTF-8" \
-            -d "$(jq -nc --arg t "$GITEE_TOKEN" --arg tag "$TAG" --arg name "$TAG" \
-                          --arg body "$NOTES" --arg br "main" \
+          API="https://gitee.com/api/v5/repos/${REPO}/releases"
+
+          # call <outfile> <curl args...>: print HTTP status + body on failure
+          call() {
+            out="$1"; shift
+            code=$(curl -s -o "$out" -w '%{http_code}' --connect-timeout 30 "$@") || code=000
+            if [ "$code" -ge 400 ] || [ "$code" = 000 ]; then
+              echo "HTTP $code from: $*" | sed "s/${GITEE_TOKEN}/***/g"
+              cat "$out" 2>/dev/null; echo
+              return 1
+            fi
+          }
+
+          # 1) get existing release for tag, else create it
+          RID=""
+          if call /tmp/rel.json --max-time 60 "${API}/tags/${TAG}?access_token=${GITEE_TOKEN}"; then
+            RID=$(jq -r '.id // empty' /tmp/rel.json)
+          fi
+          if [ -z "$RID" ]; then
+            jq -nc --arg t "$GITEE_TOKEN" --arg tag "$TAG" --arg name "$TAG" \
+                   --arg body "$NOTES" --arg br "main" \
               '{access_token:$t, tag_name:$tag, name:$name, body:$body,
-                prerelease:false, target_commitish:$br}')" \
-            | jq -r .id)
+                prerelease:false, target_commitish:$br}' > /tmp/payload.json
+            call /tmp/rel.json --max-time 120 -X POST "$API" \
+              -H "Content-Type: application/json;charset=UTF-8" \
+              --data-binary @/tmp/payload.json
+            RID=$(jq -r '.id' /tmp/rel.json)
+          fi
           echo "Gitee release id: $RID"
 
           # 2) upload zip asset
-          curl -sf --retry 5 --retry-delay 15 --retry-all-errors \
-            --connect-timeout 30 --max-time 1800 \
-            -X POST \
-            "https://gitee.com/api/v5/repos/${REPO}/releases/${RID}/attach_files" \
-            -F "access_token=${GITEE_TOKEN}" \
-            -F "file=@dist/sayhey-windows.zip"
+          ls -l dist/sayhey-windows.zip
+          for i in 1 2 3; do
+            call /tmp/att.json --max-time 1800 -X POST "${API}/${RID}/attach_files" \
+              --form-string "access_token=${GITEE_TOKEN}" \
+              -F "file=@dist/sayhey-windows.zip" && break
+            [ "$i" = 3 ] && exit 1
+            sleep 15
+          done
