@@ -9,6 +9,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 from core.version import __version__
 
 GITHUB_API = "https://api.github.com/repos/DoerrDev/SayHey/releases/latest"
+GITEE_API = "https://gitee.com/api/v5/repos/chenjunbin2345/SayHey/releases/latest"
 HTTP_TIMEOUT = 8
 
 
@@ -20,7 +21,7 @@ class UpdateInfo:
     notes: str = ""
     zip_url: str = ""
     zip_size: int = 0
-    source: str = ""  # "github"
+    source: str = ""  # "github" or "gitee"
 
 
 def _normalize(tag: str) -> tuple:
@@ -89,7 +90,10 @@ def _query(url: str, source: str) -> UpdateInfo | None:
 
 
 def check_for_updates() -> UpdateInfo | None:
-    return _query(GITHUB_API, "github")
+    info = _query(GITHUB_API, "github")
+    if info is not None:
+        return info
+    return _query(GITEE_API, "gitee")
 
 
 class _Checker(QObject):
